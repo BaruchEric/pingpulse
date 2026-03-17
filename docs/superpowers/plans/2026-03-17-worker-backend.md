@@ -560,11 +560,8 @@ export function createRouter() {
   // Auth routes (no auth guard — these handle their own auth)
   // Mounted in auth.ts
 
-  // Protected routes
-  // app.use("/api/clients/*", authGuard);
-  // app.use("/api/alerts/*", authGuard);
-  // app.use("/api/speedtest/*", authGuard);
-  // app.use("/api/export/*", authGuard);
+  // Auth is applied per-route-file via .use("*", authGuard) in each route module
+  // (clients.ts, metrics.ts, alerts.ts, speedtest.ts, export.ts)
 
   return app;
 }
