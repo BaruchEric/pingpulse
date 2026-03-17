@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import type { Env } from "@/index";
 import { rateLimit } from "@/middleware/rate-limit";
 import { authRoutes } from "@/api/auth";
+import { clientRoutes } from "@/api/clients";
+import { metricsRoutes } from "@/api/metrics";
 
 export function createRouter() {
   const app = new Hono<{ Bindings: Env }>();
@@ -17,8 +19,9 @@ export function createRouter() {
   // Auth routes (handle their own auth internally)
   app.route("/api/auth", authRoutes);
 
-  // Auth is applied per-route-file via .use("*", authGuard) in each route module
-  // (clients.ts, metrics.ts, alerts.ts, speedtest.ts, export.ts)
+  // Protected routes — auth applied per-route-file via .use("*", authGuard)
+  app.route("/api/clients", clientRoutes);
+  app.route("/api/clients", metricsRoutes);
 
   return app;
 }
