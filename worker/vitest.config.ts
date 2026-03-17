@@ -7,6 +7,9 @@ export default defineConfig({
       wrangler: { configPath: "./wrangler.toml" },
     }),
   ],
+  test: {
+    setupFiles: ["./test/apply-migrations.ts"],
+  },
   resolve: {
     alias: {
       "@": "./src",
