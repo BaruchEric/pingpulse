@@ -1,4 +1,7 @@
 import { createRouter } from "@/api/router";
+import { ClientMonitor } from "@/durable-objects/client-monitor";
+
+export { ClientMonitor };
 
 export interface Env {
   DB: D1Database;
