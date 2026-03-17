@@ -37,6 +37,29 @@ export default {
       return stub.fetch(request);
     }
 
+    // Speed test payload endpoints (no auth — client uses these during test)
+    if (url.pathname === "/speedtest/download") {
+      const size = parseInt(url.searchParams.get("size") || "262144");
+      const totalSize = Math.min(size, 25 * 1024 * 1024);
+      const payload = new Uint8Array(totalSize);
+      // getRandomValues() has a 64KB limit per call
+      const CHUNK = 65536;
+      for (let i = 0; i < totalSize; i += CHUNK) {
+        const end = Math.min(i + CHUNK, totalSize);
+        crypto.getRandomValues(payload.subarray(i, end));
+      }
+      return new Response(payload, {
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+    }
+
+    if (url.pathname === "/speedtest/upload" && request.method === "POST") {
+      const body = await request.arrayBuffer();
+      return new Response(JSON.stringify({ received_bytes: body.byteLength }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     return app.fetch(request, env, ctx);
   },
 
