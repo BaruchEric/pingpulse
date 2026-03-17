@@ -42,9 +42,38 @@ export default {
 
   async scheduled(
     _event: ScheduledEvent,
-    _env: Env,
-    _ctx: ExecutionContext
+    env: Env,
+    ctx: ExecutionContext
   ): Promise<void> {
-    // TODO: cron handler
+    const { archiveOldRecords } = await import("@/services/archiver");
+
+    // Trigger full speed test on each connected client
+    const { results: clients } = await env.DB.prepare(
+      "SELECT id FROM clients"
+    ).all();
+
+    for (const client of clients) {
+      const doId = env.CLIENT_MONITOR.idFromName(client.id as string);
+      const stub = env.CLIENT_MONITOR.get(doId);
+      try {
+        await stub.fetch("http://internal/trigger-speed-test", {
+          method: "POST",
+        });
+      } catch {
+        // Client may not be connected
+      }
+    }
+
+    // Archive old records + clean up rate limit table
+    ctx.waitUntil(
+      Promise.all([
+        archiveOldRecords(env, 30),
+        env.DB.prepare(
+          "DELETE FROM rate_limits WHERE window_start < ?"
+        )
+          .bind(new Date(Date.now() - 3600_000).toISOString())
+          .run(),
+      ])
+    );
   },
 };

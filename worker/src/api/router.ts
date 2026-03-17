@@ -6,6 +6,7 @@ import { clientRoutes } from "@/api/clients";
 import { metricsRoutes } from "@/api/metrics";
 import { alertRoutes } from "@/api/alerts";
 import { speedtestRoutes } from "@/api/speedtest";
+import { exportRoutes } from "@/api/export";
 
 export function createRouter() {
   const app = new Hono<{ Bindings: Env }>();
@@ -26,6 +27,7 @@ export function createRouter() {
   app.route("/api/clients", metricsRoutes);
   app.route("/api/alerts", alertRoutes);
   app.route("/api/speedtest", speedtestRoutes);
+  app.route("/api/export", exportRoutes);
 
   return app;
 }
