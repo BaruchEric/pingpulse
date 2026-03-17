@@ -50,7 +50,7 @@ function generateToken(length: number = 32): string {
 // Login: 5 attempts/min
 authRoutes.post(
   "/login",
-  rateLimit({ maxRequests: 5, windowMs: 60_000 }),
+  rateLimit({ maxRequests: 5, windowMs: 60_000, prefix: "login" }),
   async (c) => {
     const { password } = await c.req.json<{ password: string }>();
     const hash = await hashString(password);

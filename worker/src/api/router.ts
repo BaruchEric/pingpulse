@@ -4,6 +4,8 @@ import { rateLimit } from "@/middleware/rate-limit";
 import { authRoutes } from "@/api/auth";
 import { clientRoutes } from "@/api/clients";
 import { metricsRoutes } from "@/api/metrics";
+import { alertRoutes } from "@/api/alerts";
+import { speedtestRoutes } from "@/api/speedtest";
 
 export function createRouter() {
   const app = new Hono<{ Bindings: Env }>();
@@ -22,6 +24,8 @@ export function createRouter() {
   // Protected routes — auth applied per-route-file via .use("*", authGuard)
   app.route("/api/clients", clientRoutes);
   app.route("/api/clients", metricsRoutes);
+  app.route("/api/alerts", alertRoutes);
+  app.route("/api/speedtest", speedtestRoutes);
 
   return app;
 }
