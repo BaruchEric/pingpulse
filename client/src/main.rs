@@ -1,6 +1,7 @@
 mod config;
 mod logger;
 mod messages;
+mod service;
 mod speed_test;
 mod websocket;
 
