@@ -7,6 +7,7 @@ mod logger;
 mod messages;
 mod service;
 mod speed_test;
+mod agent;
 mod websocket;
 
 use clap::{Parser, Subcommand};
@@ -45,6 +46,12 @@ enum Commands {
     Stop,
     /// Check the daemon status
     Status,
+    /// Run the local management API server
+    Agent {
+        /// Port for the local management API
+        #[arg(long, default_value = "9111")]
+        port: u16,
+    },
 }
 
 #[tokio::main]
@@ -83,6 +90,12 @@ async fn main() {
                     eprintln!("Status check failed: {e}");
                     std::process::exit(1);
                 }
+            }
+        }
+        Commands::Agent { port } => {
+            if let Err(e) = agent::run(port).await {
+                eprintln!("Agent error: {e}");
+                std::process::exit(1);
             }
         }
     }
