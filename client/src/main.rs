@@ -1,4 +1,5 @@
 mod config;
+mod logger;
 mod messages;
 
 fn main() {
