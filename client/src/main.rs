@@ -60,11 +60,9 @@ async fn main() {
                     eprintln!("Daemon error: {e}");
                     std::process::exit(1);
                 }
-            } else {
-                if let Err(e) = cmd_start_service() {
-                    eprintln!("Service install failed: {e}");
-                    std::process::exit(1);
-                }
+            } else if let Err(e) = cmd_start_service() {
+                eprintln!("Service install failed: {e}");
+                std::process::exit(1);
             }
         }
         Commands::Stop => {

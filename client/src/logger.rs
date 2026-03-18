@@ -1,6 +1,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use chrono::Local;
@@ -84,10 +84,7 @@ impl<'a> Write for DailyFileWriteGuard<'a> {
         if let Some(ref mut file) = state.file {
             file.write(buf)
         } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "No log file",
-            ))
+            Err(std::io::Error::other("No log file"))
         }
     }
 
@@ -129,6 +126,7 @@ pub fn init(logs_dir: PathBuf, level: &str, retention_days: u32) {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::path::Path;
 
     fn test_writer(dir: &Path) -> DailyFileWriter {
         DailyFileWriter::new(dir.to_path_buf())

@@ -27,6 +27,7 @@ pub struct SpeedTestResult {
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(dead_code)] // fields populated by serde deserialization
 pub enum IncomingMessage {
     Ping {
         id: String,
