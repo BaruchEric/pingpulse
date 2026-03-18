@@ -23,6 +23,42 @@ export function createRouter() {
   // Auth routes (handle their own auth internally)
   app.route("/api/auth", authRoutes);
 
+  // Client self-delete (authenticated with client secret, not admin JWT)
+  app.delete("/api/clients/:id/self", async (c) => {
+    const id = c.req.param("id");
+    const authHeader = c.req.header("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return c.json({ error: "Missing or invalid Authorization header" }, 401);
+    }
+    const secret = authHeader.slice(7);
+
+    const { hashString } = await import("@/utils/hash");
+    const client = await c.env.DB.prepare(
+      "SELECT id, secret_hash FROM clients WHERE id = ?"
+    )
+      .bind(id)
+      .first<{ id: string; secret_hash: string }>();
+
+    if (!client) {
+      return c.json({ error: "Client not found" }, 404);
+    }
+
+    const secretHash = await hashString(secret);
+    if (secretHash !== client.secret_hash) {
+      return c.json({ error: "Invalid client secret" }, 403);
+    }
+
+    await c.env.DB.batch([
+      c.env.DB.prepare("DELETE FROM ping_results WHERE client_id = ?").bind(id),
+      c.env.DB.prepare("DELETE FROM speed_tests WHERE client_id = ?").bind(id),
+      c.env.DB.prepare("DELETE FROM outages WHERE client_id = ?").bind(id),
+      c.env.DB.prepare("DELETE FROM alerts WHERE client_id = ?").bind(id),
+      c.env.DB.prepare("DELETE FROM clients WHERE id = ?").bind(id),
+    ]);
+
+    return c.json({ ok: true });
+  });
+
   // Protected routes — auth applied per-route-file via .use("*", authGuard)
   app.route("/api/clients", clientRoutes);
   app.route("/api/metrics", metricsRoutes);
