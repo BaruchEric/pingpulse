@@ -8,6 +8,7 @@ import { Clients } from "@/pages/Clients";
 import { ClientDetail } from "@/pages/ClientDetail";
 import { Alerts } from "@/pages/Alerts";
 import { Settings } from "@/pages/Settings";
+import { ControlPanel } from "@/pages/ControlPanel";
 
 export function App() {
   const { authed, login, logout } = useAuth();
@@ -31,6 +32,7 @@ export function App() {
           <Route index element={<Overview />} />
           <Route path="clients" element={<Clients />} />
           <Route path="client/:id" element={<ClientDetail />} />
+          <Route path="client/:id/control" element={<ControlPanel />} />
           <Route path="alerts" element={<Alerts />} />
           <Route path="settings" element={<Settings />} />
         </Route>

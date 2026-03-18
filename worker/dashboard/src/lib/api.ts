@@ -84,6 +84,23 @@ export const api = {
   triggerSpeedTest: (id: string) =>
     request<{ ok: boolean }>(`/api/speedtest/${id}`, { method: "POST" }),
 
+  // Commands
+  sendCommand: (id: string, command: string, params?: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/api/command/${id}`, {
+      method: "POST",
+      body: JSON.stringify({ command, params }),
+    }),
+  getClientStatus: (id: string) =>
+    request<{
+      connected: boolean;
+      session_count: number;
+      paused: boolean;
+      simulation: { latency_ms: number; loss_pct: number };
+      pings_in_flight: number;
+      buffer_size: number;
+      disconnected_at: string | null;
+    }>(`/api/command/${id}/status`),
+
   // Export
   exportData: (id: string, format: "json" | "csv", from?: string, to?: string) => {
     const params = new URLSearchParams({ format });

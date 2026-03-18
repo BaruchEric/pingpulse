@@ -65,7 +65,7 @@ export function ClientDetail() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Link to="/" className="text-zinc-500 hover:text-zinc-300">&larr;</Link>
           <div>
@@ -79,7 +79,13 @@ export function ClientDetail() {
           />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to={`/client/${id}/control`}
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+          >
+            Control Panel
+          </Link>
           <button
             onClick={handleSpeedTest}
             disabled={speedTestRunning}
@@ -93,7 +99,7 @@ export function ClientDetail() {
 
       {/* Summary stats */}
       {metrics && (
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
           {[
             ["Avg RTT", `${metrics.summary.avg_rtt_ms.toFixed(1)}ms`],
             ["P95 RTT", `${metrics.summary.p95_rtt_ms.toFixed(1)}ms`],
@@ -129,7 +135,8 @@ export function ClientDetail() {
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
         <h2 className="mb-3 text-sm font-medium text-zinc-400">Speed Test History</h2>
         {metrics?.speed_tests && metrics.speed_tests.length > 0 ? (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px]">
             <thead className="bg-zinc-900/80">
               <tr>
                 {["Date/Time", "Type", "Download (Mbps)", "Upload (Mbps)", "Duration (ms)"].map((h) => (
@@ -149,6 +156,7 @@ export function ClientDetail() {
               ))}
             </tbody>
           </table>
+          </div>
         ) : (
           <p className="text-sm text-zinc-500">No speed tests recorded</p>
         )}

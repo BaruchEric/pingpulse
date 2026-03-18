@@ -53,7 +53,7 @@ pub async fn run_probe(
 
     let result = SpeedTestResult {
         client_id: client_id.to_string(),
-        timestamp: chrono::Local::now().to_rfc3339(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
         test_type: SpeedTestType::Probe,
         download_mbps,
         upload_mbps,
@@ -126,7 +126,7 @@ pub async fn run_full(
 
     let result = SpeedTestResult {
         client_id: client_id.to_string(),
-        timestamp: chrono::Local::now().to_rfc3339(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
         test_type: SpeedTestType::Full,
         download_mbps,
         upload_mbps,

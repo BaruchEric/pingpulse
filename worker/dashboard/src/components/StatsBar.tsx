@@ -16,7 +16,7 @@ export function StatsBar({ clients }: { clients: Client[] }) {
     : "—";
 
   return (
-    <div className="flex gap-6 rounded-lg border border-zinc-800 bg-zinc-900/50 px-6 py-3">
+    <div className="grid grid-cols-2 gap-4 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 sm:flex sm:gap-6 sm:px-6">
       <Stat label="Total Clients" value={total} />
       <Stat label="Up" value={up} className="text-emerald-400" />
       <Stat label="Down" value={down} className={down > 0 ? "text-red-400" : "text-zinc-400"} />

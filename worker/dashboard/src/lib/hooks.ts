@@ -78,7 +78,7 @@ export function useMetrics(id: string, range: TimeRange) {
       const { from, to } = getTimeRange(range);
       return api.getMetrics(id, from, to);
     },
-    30_000,
+    10_000,
     [id, range]
   );
 }
@@ -86,9 +86,13 @@ export function useMetrics(id: string, range: TimeRange) {
 export function useAlerts(clientId?: string, limit = 50) {
   return usePolling(
     () => api.listAlerts(clientId, limit).then((r) => r.alerts),
-    30_000,
+    10_000,
     [clientId, limit]
   );
+}
+
+export function useClientStatus(id: string) {
+  return usePolling(() => api.getClientStatus(id), 5_000, [id]);
 }
 
 export function useAuth() {
