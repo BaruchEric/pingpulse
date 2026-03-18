@@ -1,9 +1,27 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use reqwest::Client;
 use tracing::info;
 
 use crate::messages::{SpeedTestResult, SpeedTestType};
+
+fn bytes_to_mbps(bytes: u64, elapsed: Duration) -> f64 {
+    (bytes as f64 * 8.0) / (elapsed.as_secs_f64() * 1_000_000.0)
+}
+
+fn log_result(result: &SpeedTestResult) {
+    let test_type = match result.test_type {
+        SpeedTestType::Probe => "probe",
+        SpeedTestType::Full => "full",
+    };
+    info!(
+        event = "speed_test_complete",
+        test_type,
+        download_mbps = result.download_mbps,
+        upload_mbps = result.upload_mbps,
+        duration_ms = result.duration_ms,
+    );
+}
 
 /// Run a probe speed test: single sequential download + upload.
 pub async fn run_probe(
@@ -21,15 +39,15 @@ pub async fn run_probe(
     let dl_start = Instant::now();
     let dl_bytes = http.get(&download_url).send().await?.bytes().await?;
     let dl_elapsed = dl_start.elapsed();
-    let download_mbps = (dl_bytes.len() as f64 * 8.0) / (dl_elapsed.as_secs_f64() * 1_000_000.0);
+    let download_mbps = bytes_to_mbps(dl_bytes.len() as u64, dl_elapsed);
 
-    // Upload
+    // Upload — allocate before starting the timer
     let upload_url = format!("{base_url}/api/speedtest/upload");
-    let ul_start = Instant::now();
     let payload = vec![0u8; payload_size as usize];
+    let ul_start = Instant::now();
     http.post(&upload_url).body(payload).send().await?;
     let ul_elapsed = ul_start.elapsed();
-    let upload_mbps = (payload_size as f64 * 8.0) / (ul_elapsed.as_secs_f64() * 1_000_000.0);
+    let upload_mbps = bytes_to_mbps(payload_size, ul_elapsed);
 
     let total_elapsed = start.elapsed();
 
@@ -43,14 +61,7 @@ pub async fn run_probe(
         duration_ms: total_elapsed.as_millis() as u64,
     };
 
-    info!(
-        event = "speed_test_complete",
-        test_type = "probe",
-        download_mbps = format!("{:.1}", result.download_mbps),
-        upload_mbps = format!("{:.1}", result.upload_mbps),
-        duration_ms = result.duration_ms,
-    );
-
+    log_result(&result);
     Ok(result)
 }
 
@@ -88,7 +99,7 @@ pub async fn run_full(
         total_dl_bytes += task.await??;
     }
     let dl_elapsed = dl_start.elapsed();
-    let download_mbps = (total_dl_bytes as f64 * 8.0) / (dl_elapsed.as_secs_f64() * 1_000_000.0);
+    let download_mbps = bytes_to_mbps(total_dl_bytes as u64, dl_elapsed);
 
     // Parallel upload
     let upload_url = format!("{base_url}/api/speedtest/upload");
@@ -109,7 +120,7 @@ pub async fn run_full(
         task.await??;
     }
     let ul_elapsed = ul_start.elapsed();
-    let upload_mbps = (total_payload as f64 * 8.0) / (ul_elapsed.as_secs_f64() * 1_000_000.0);
+    let upload_mbps = bytes_to_mbps(total_payload, ul_elapsed);
 
     let total_elapsed = start.elapsed();
 
@@ -123,13 +134,6 @@ pub async fn run_full(
         duration_ms: total_elapsed.as_millis() as u64,
     };
 
-    info!(
-        event = "speed_test_complete",
-        test_type = "full",
-        download_mbps = format!("{:.1}", result.download_mbps),
-        upload_mbps = format!("{:.1}", result.upload_mbps),
-        duration_ms = result.duration_ms,
-    );
-
+    log_result(&result);
     Ok(result)
 }

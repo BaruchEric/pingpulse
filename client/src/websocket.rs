@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
+use tokio::sync::mpsc;
 use tokio::time::{self};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{info, warn, error};
@@ -8,6 +9,20 @@ use tracing::{info, warn, error};
 use crate::config::Config;
 use crate::messages::{IncomingMessage, OutgoingMessage, SpeedTestType};
 use crate::speed_test;
+
+type WsSink = futures_util::stream::SplitSink<
+    tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+    Message,
+>;
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
 
 /// Run the main WebSocket event loop with auto-reconnect.
 pub async fn run(config: Config) -> anyhow::Result<()> {
@@ -83,6 +98,11 @@ async fn connect_and_run(
     ping_interval.tick().await; // Skip the immediate first tick
     let mut ping_counter: u64 = 0;
 
+    let (speed_tx, mut speed_rx) = mpsc::unbounded_channel::<OutgoingMessage>();
+
+    let shutdown = shutdown_signal();
+    tokio::pin!(shutdown);
+
     loop {
         tokio::select! {
             msg = stream.next() => {
@@ -96,6 +116,7 @@ async fn connect_and_run(
                                     http,
                                     &mut sink,
                                     &mut ping_interval,
+                                    &speed_tx,
                                 ).await;
                             }
                             Err(e) => {
@@ -115,10 +136,7 @@ async fn connect_and_run(
 
             _ = ping_interval.tick() => {
                 ping_counter += 1;
-                let ts = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64;
+                let ts = now_ms();
                 let msg = OutgoingMessage::Ping {
                     id: format!("client-{ping_counter}"),
                     ts,
@@ -131,7 +149,15 @@ async fn connect_and_run(
                 info!(event = "ping_sent", id = format!("client-{ping_counter}"));
             }
 
-            _ = shutdown_signal() => {
+            Some(msg) = speed_rx.recv() => {
+                let json = serde_json::to_string(&msg).unwrap();
+                if let Err(e) = sink.send(Message::Text(json.into())).await {
+                    error!(event = "speed_test_send_error", error = %e);
+                    return Ok(Shutdown::Disconnected);
+                }
+            }
+
+            _ = &mut shutdown => {
                 let _ = sink.close().await;
                 return Ok(Shutdown::Graceful);
             }
@@ -143,21 +169,13 @@ async fn handle_message(
     msg: IncomingMessage,
     config: &mut Config,
     http: &reqwest::Client,
-    sink: &mut futures_util::stream::SplitSink<
-        tokio_tungstenite::WebSocketStream<
-            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-        >,
-        Message,
-    >,
+    sink: &mut WsSink,
     ping_interval: &mut time::Interval,
+    speed_tx: &mpsc::UnboundedSender<OutgoingMessage>,
 ) {
     match msg {
         IncomingMessage::Ping { id, ts, .. } => {
-            let client_ts = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64;
-            let pong = OutgoingMessage::Pong { id: id.clone(), ts, client_ts };
+            let pong = OutgoingMessage::Pong { id: id.clone(), ts, client_ts: now_ms() };
             let json = serde_json::to_string(&pong).unwrap();
             if let Err(e) = sink.send(Message::Text(json.into())).await {
                 error!(event = "pong_send_error", error = %e);
@@ -166,12 +184,7 @@ async fn handle_message(
         }
 
         IncomingMessage::Pong { id, ts, client_ts: _ } => {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64;
-            // ts was our original timestamp
-            let rtt_ms = now.saturating_sub(ts);
+            let rtt_ms = now_ms().saturating_sub(ts);
             info!(event = "pong_received", ping_id = %id, rtt_ms = rtt_ms);
         }
 
@@ -209,33 +222,32 @@ async fn handle_message(
             let client_id = config.server.client_id.clone();
             let probe_size = config.speed_test.probe_size_bytes;
             let full_size = config.speed_test.full_test_payload_bytes;
+            let tx = speed_tx.clone();
 
-            let result = match test_type {
-                SpeedTestType::Probe => {
-                    speed_test::run_probe(&http, &base_url, &client_id, probe_size).await
-                }
-                SpeedTestType::Full => {
-                    speed_test::run_full(&http, &base_url, &client_id, full_size).await
-                }
-            };
-
-            match result {
-                Ok(result) => {
-                    let msg = OutgoingMessage::SpeedTestResult { result };
-                    let json = serde_json::to_string(&msg).unwrap();
-                    if let Err(e) = sink.send(Message::Text(json.into())).await {
-                        error!(event = "speed_test_send_error", error = %e);
+            tokio::spawn(async move {
+                let result = match test_type {
+                    SpeedTestType::Probe => {
+                        speed_test::run_probe(&http, &base_url, &client_id, probe_size).await
                     }
+                    SpeedTestType::Full => {
+                        speed_test::run_full(&http, &base_url, &client_id, full_size).await
+                    }
+                };
+
+                let msg = match result {
+                    Ok(result) => OutgoingMessage::SpeedTestResult { result },
+                    Err(e) => {
+                        error!(event = "speed_test_error", error = %e);
+                        OutgoingMessage::Error {
+                            message: format!("Speed test failed: {e}"),
+                        }
+                    }
+                };
+
+                if tx.send(msg).is_err() {
+                    warn!(event = "speed_test_channel_closed");
                 }
-                Err(e) => {
-                    error!(event = "speed_test_error", error = %e);
-                    let msg = OutgoingMessage::Error {
-                        message: format!("Speed test failed: {e}"),
-                    };
-                    let json = serde_json::to_string(&msg).unwrap();
-                    let _ = sink.send(Message::Text(json.into())).await;
-                }
-            }
+            });
         }
     }
 }

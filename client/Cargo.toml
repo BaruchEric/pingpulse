@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "time", "signal", "process"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "time", "signal", "process", "sync"] }
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 reqwest = { version = "0.12", features = ["json"] }
 clap = { version = "4", features = ["derive"] }
