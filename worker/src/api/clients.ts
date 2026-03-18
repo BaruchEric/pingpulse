@@ -145,9 +145,24 @@ clientRoutes.put("/:id", async (c) => {
 
 clientRoutes.delete("/:id", async (c) => {
   const id = c.req.param("id");
+
   const { deleted } = await deleteClientCascade(c.env.DB, id);
   if (!deleted) {
     return c.json({ error: "Client not found" }, 404);
   }
+
+  // Notify connected agent after confirming client exists (best-effort)
+  try {
+    const doId = c.env.CLIENT_MONITOR.idFromName(id);
+    const stub = c.env.CLIENT_MONITOR.get(doId);
+    await stub.fetch(new Request("http://do/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: "deregister" }),
+    }));
+  } catch {
+    // Best effort — agent may not be connected
+  }
+
   return c.json({ ok: true });
 });

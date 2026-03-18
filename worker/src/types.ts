@@ -78,4 +78,5 @@ export type WSMessage =
   | { type: "config_update"; config: ClientConfig }
   | { type: "start_speed_test"; test_type: "probe" | "full" }
   | { type: "speed_test_result"; result: SpeedTestResult }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "deregistered"; reason: string };

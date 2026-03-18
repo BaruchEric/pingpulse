@@ -340,6 +340,12 @@ export class ClientMonitor implements DurableObject {
     }
   }
 
+  private closeAllSessions(reason: string): void {
+    for (const ws of this.sessions) {
+      try { ws.close(1000, reason); } catch { /* ignore */ }
+    }
+  }
+
   private async ensureConfigLoaded(): Promise<void> {
     if (this.configLoaded || !this.clientId) return;
     const configRow = await this.env.DB.prepare(
@@ -556,11 +562,15 @@ export class ClientMonitor implements DurableObject {
         return Response.json({ ok: true, simulation: this.simulation });
 
       case "disconnect": {
-        // Force-close all WebSocket sessions
-        for (const ws of this.sessions) {
-          try { ws.close(1000, "Admin disconnect"); } catch { /* ignore */ }
-        }
+        this.closeAllSessions("Admin disconnect");
         return Response.json({ ok: true, message: "Client disconnected" });
+      }
+
+      case "deregister": {
+        // Notify connected agent it has been deleted, then close sessions
+        this.broadcast({ type: "deregistered", reason: "Client deleted by admin" });
+        this.closeAllSessions("Deregistered");
+        return Response.json({ ok: true, message: "Client notified and disconnected" });
       }
 
       case "update_config": {
