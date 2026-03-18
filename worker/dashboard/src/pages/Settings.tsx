@@ -8,6 +8,8 @@ export function Settings() {
   const [newPassword, setNewPassword] = useState("");
   const [passwordMsg, setPasswordMsg] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,16 +81,36 @@ export function Settings() {
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-zinc-400">Export Data</h2>
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+          <div className="flex items-end gap-4">
+            <div>
+              <label className="block text-xs text-zinc-500">From</label>
+              <input
+                type="date"
+                value={exportFrom}
+                onChange={(e) => setExportFrom(e.target.value)}
+                className="mt-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 focus:border-[var(--color-accent)] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500">To</label>
+              <input
+                type="date"
+                value={exportTo}
+                onChange={(e) => setExportTo(e.target.value)}
+                className="mt-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 focus:border-[var(--color-accent)] focus:outline-none"
+              />
+            </div>
+          </div>
           {clients && clients.length > 0 ? (
             clients.map((client) => (
               <div key={client.id} className="flex items-center justify-between">
                 <span className="text-sm">{client.name}</span>
                 <div className="flex gap-2">
-                  <a href={api.exportData(client.id, "json")}
+                  <a href={api.exportData(client.id, "json", exportFrom || undefined, exportTo || undefined)}
                     className="rounded-md border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-800" download>
                     JSON
                   </a>
-                  <a href={api.exportData(client.id, "csv")}
+                  <a href={api.exportData(client.id, "csv", exportFrom || undefined, exportTo || undefined)}
                     className="rounded-md border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-800" download>
                     CSV
                   </a>

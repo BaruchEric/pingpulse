@@ -95,6 +95,35 @@ export function ClientDetail() {
         <ThroughputChart tests={metrics?.speed_tests || []} />
       </div>
 
+      {/* Speed test history table */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+        <h2 className="mb-3 text-sm font-medium text-zinc-400">Speed Test History</h2>
+        {metrics?.speed_tests && metrics.speed_tests.length > 0 ? (
+          <table className="w-full">
+            <thead className="bg-zinc-900/80">
+              <tr>
+                {["Date/Time", "Type", "Download (Mbps)", "Upload (Mbps)", "Duration (ms)"].map((h) => (
+                  <th key={h} className="px-3 py-2 text-left text-xs text-zinc-500 font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800">
+              {metrics.speed_tests.map((st, i) => (
+                <tr key={i} className="hover:bg-zinc-800/30">
+                  <td className="px-3 py-2 text-sm text-zinc-300 font-mono">{new Date(st.timestamp).toLocaleString()}</td>
+                  <td className="px-3 py-2 text-sm text-zinc-400">{st.type}</td>
+                  <td className="px-3 py-2 text-sm text-zinc-300 font-mono">{st.download_mbps.toFixed(1)}</td>
+                  <td className="px-3 py-2 text-sm text-zinc-300 font-mono">{st.upload_mbps.toFixed(1)}</td>
+                  <td className="px-3 py-2 text-sm text-zinc-300 font-mono">{st.duration_ms}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-sm text-zinc-500">No speed tests recorded</p>
+        )}
+      </div>
+
       {/* Outage timeline */}
       {metrics && metrics.outages.length > 0 && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
