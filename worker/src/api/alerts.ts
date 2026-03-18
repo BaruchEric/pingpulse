@@ -2,14 +2,14 @@ import { Hono } from "hono";
 import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
 import { dispatchAlert } from "@/services/alert-dispatch";
+import { parsePagination } from "@/utils/pagination";
 
 export const alertRoutes = new Hono<AppEnv>();
 
 alertRoutes.use("*", authGuard);
 
 alertRoutes.get("/", async (c) => {
-  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "50") || 50, 1), 200);
-  const offset = Math.max(parseInt(c.req.query("offset") || "0") || 0, 0);
+  const { limit, offset } = parsePagination((k) => c.req.query(k));
   const clientId = c.req.query("client_id");
 
   let query = "SELECT * FROM alerts";

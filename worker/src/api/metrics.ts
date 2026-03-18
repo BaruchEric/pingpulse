@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
+import { parsePagination } from "@/utils/pagination";
 
 export const metricsRoutes = new Hono<AppEnv>();
 
@@ -67,20 +68,20 @@ metricsRoutes.get("/:id", async (c) => {
 // GET /api/metrics/:id/logs?limit=50&offset=0
 metricsRoutes.get("/:id/logs", async (c) => {
   const id = c.req.param("id");
-  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "50") || 50, 1), 200);
-  const offset = Math.max(parseInt(c.req.query("offset") || "0") || 0, 0);
+  const { limit, offset } = parsePagination((k) => c.req.query(k));
 
-  const countRow = await c.env.DB.prepare(
-    "SELECT COUNT(*) as total FROM ping_results WHERE client_id = ?"
-  )
-    .bind(id)
-    .first<{ total: number }>();
-
-  const { results: logs } = await c.env.DB.prepare(
-    "SELECT id, timestamp, rtt_ms, jitter_ms, direction, status FROM ping_results WHERE client_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?"
-  )
-    .bind(id, limit, offset)
-    .all();
+  const [countRow, { results: logs }] = await Promise.all([
+    c.env.DB.prepare(
+      "SELECT COUNT(*) as total FROM ping_results WHERE client_id = ?"
+    )
+      .bind(id)
+      .first<{ total: number }>(),
+    c.env.DB.prepare(
+      "SELECT id, timestamp, rtt_ms, jitter_ms, direction, status FROM ping_results WHERE client_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+    )
+      .bind(id, limit, offset)
+      .all(),
+  ]);
 
   return c.json({ logs, total: countRow?.total || 0, limit, offset });
 });
