@@ -35,7 +35,6 @@ pub fn install_agent(binary_path: &str) -> Result<()> {
 }
 
 /// Stop and uninstall the agent service.
-#[allow(dead_code)]
 pub fn stop_agent() -> Result<()> {
     #[cfg(target_os = "macos")]
     return stop_agent_launchd();
@@ -72,7 +71,6 @@ pub fn uninstall_all() -> Result<()> {
 }
 
 /// Remove the PingPulse data directory.
-#[allow(dead_code)]
 pub fn cleanup_data() -> Result<()> {
     let dir = crate::config::Config::config_dir();
     if dir.exists() {
