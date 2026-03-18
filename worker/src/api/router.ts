@@ -8,6 +8,8 @@ import { alertRoutes } from "@/api/alerts";
 import { speedtestRoutes } from "@/api/speedtest";
 import { exportRoutes } from "@/api/export";
 import { commandRoutes } from "@/api/command";
+import { hashString } from "@/utils/hash";
+import { deleteClientCascade } from "@/utils/client-db";
 
 export function createRouter() {
   const app = new Hono<AppEnv>();
@@ -32,7 +34,6 @@ export function createRouter() {
     }
     const secret = authHeader.slice(7);
 
-    const { hashString } = await import("@/utils/hash");
     const client = await c.env.DB.prepare(
       "SELECT id, secret_hash FROM clients WHERE id = ?"
     )
@@ -48,13 +49,10 @@ export function createRouter() {
       return c.json({ error: "Invalid client secret" }, 403);
     }
 
-    await c.env.DB.batch([
-      c.env.DB.prepare("DELETE FROM ping_results WHERE client_id = ?").bind(id),
-      c.env.DB.prepare("DELETE FROM speed_tests WHERE client_id = ?").bind(id),
-      c.env.DB.prepare("DELETE FROM outages WHERE client_id = ?").bind(id),
-      c.env.DB.prepare("DELETE FROM alerts WHERE client_id = ?").bind(id),
-      c.env.DB.prepare("DELETE FROM clients WHERE id = ?").bind(id),
-    ]);
+    const { deleted } = await deleteClientCascade(c.env.DB, id);
+    if (!deleted) {
+      return c.json({ error: "Client not found" }, 404);
+    }
 
     return c.json({ ok: true });
   });

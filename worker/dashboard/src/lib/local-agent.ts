@@ -3,8 +3,6 @@ const AGENT_TIMEOUT = 2000;
 
 export interface AgentStatus {
   client_id: string;
-  client_name: string;
-  location: string;
   server_url: string;
   daemon_running: boolean;
   agent_version: string;

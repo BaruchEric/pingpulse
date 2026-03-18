@@ -21,8 +21,6 @@ struct AppState {
 #[derive(Serialize)]
 struct StatusResponse {
     client_id: String,
-    client_name: String,
-    location: String,
     server_url: String,
     daemon_running: bool,
     agent_version: String,
@@ -92,11 +90,11 @@ struct LogsResponse {
 }
 
 async fn get_status(State(state): State<Arc<AppState>>) -> Json<StatusResponse> {
-    let daemon_running = service::status().unwrap_or(false);
+    let daemon_running = tokio::task::spawn_blocking(|| service::status().unwrap_or(false))
+        .await
+        .unwrap_or(false);
     Json(StatusResponse {
         client_id: state.config.server.client_id.clone(),
-        client_name: String::new(),
-        location: String::new(),
         server_url: state.config.server.base_url.clone(),
         daemon_running,
         agent_version: env!("CARGO_PKG_VERSION").into(),
@@ -104,35 +102,36 @@ async fn get_status(State(state): State<Arc<AppState>>) -> Json<StatusResponse> 
     })
 }
 
+fn resolve_binary_path() -> Result<String, String> {
+    std::env::current_exe()
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| format!("Cannot find binary path: {e}"))
+}
+
 async fn daemon_start() -> Json<ActionResponse> {
-    let binary = match std::env::current_exe() {
-        Ok(p) => p.to_string_lossy().to_string(),
-        Err(e) => return Json(ActionResponse::error(format!("Cannot find binary path: {e}"))),
+    let binary = match resolve_binary_path() {
+        Ok(b) => b,
+        Err(e) => return Json(ActionResponse::error(e)),
     };
-    match service::install_and_start(&binary) {
-        Ok(()) => Json(ActionResponse::success()),
-        Err(e) => Json(ActionResponse::error(format!("Failed to start daemon: {e}"))),
+    match tokio::task::spawn_blocking(move || service::install_and_start(&binary)).await {
+        Ok(Ok(())) => Json(ActionResponse::success()),
+        Ok(Err(e)) => Json(ActionResponse::error(format!("Failed to start daemon: {e}"))),
+        Err(e) => Json(ActionResponse::error(format!("Internal error: {e}"))),
     }
 }
 
 async fn daemon_stop() -> Json<ActionResponse> {
-    match service::stop() {
-        Ok(()) => Json(ActionResponse::success()),
-        Err(e) => Json(ActionResponse::error(format!("Failed to stop daemon: {e}"))),
+    match tokio::task::spawn_blocking(service::stop).await {
+        Ok(Ok(())) => Json(ActionResponse::success()),
+        Ok(Err(e)) => Json(ActionResponse::error(format!("Failed to stop daemon: {e}"))),
+        Err(e) => Json(ActionResponse::error(format!("Internal error: {e}"))),
     }
 }
 
 async fn daemon_restart() -> Json<ActionResponse> {
-    let _ = service::stop();
+    let _ = tokio::task::spawn_blocking(service::stop).await;
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    let binary = match std::env::current_exe() {
-        Ok(p) => p.to_string_lossy().to_string(),
-        Err(e) => return Json(ActionResponse::error(format!("Cannot find binary path: {e}"))),
-    };
-    match service::install_and_start(&binary) {
-        Ok(()) => Json(ActionResponse::success()),
-        Err(e) => Json(ActionResponse::error(format!("Failed to restart daemon: {e}"))),
-    }
+    daemon_start().await
 }
 
 async fn get_config(State(state): State<Arc<AppState>>) -> Json<SanitizedConfig> {
@@ -145,26 +144,61 @@ async fn get_logs() -> Json<LogsResponse> {
     let log_file = logs_dir.join(format!("{today}.jsonl"));
     let file_name = log_file.display().to_string();
 
-    let lines = match std::fs::read_to_string(&log_file) {
-        Ok(content) => content
-            .lines()
-            .rev()
-            .take(100)
-            .map(String::from)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect(),
-        Err(_) => vec![],
-    };
+    let log_file_clone = log_file.clone();
+    let lines = tokio::task::spawn_blocking(move || read_tail_lines(&log_file_clone, 100))
+        .await
+        .unwrap_or_default();
 
     Json(LogsResponse { lines, file: file_name })
 }
 
+/// Read the last `n` lines from a file efficiently by reading backward from EOF.
+fn read_tail_lines(path: &std::path::Path, n: usize) -> Vec<String> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let mut file = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return vec![],
+    };
+    let len = match file.metadata() {
+        Ok(m) => m.len(),
+        Err(_) => return vec![],
+    };
+    if len == 0 {
+        return vec![];
+    }
+
+    // Read up to 64KB from the end — should be plenty for 100 JSONL lines
+    let read_size = len.min(64 * 1024) as usize;
+    let offset = len - read_size as u64;
+    file.seek(SeekFrom::Start(offset)).ok();
+    let mut buf = vec![0u8; read_size];
+    let bytes_read = match file.read(&mut buf) {
+        Ok(n) => n,
+        Err(_) => return vec![],
+    };
+    buf.truncate(bytes_read);
+
+    let content = String::from_utf8_lossy(&buf);
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+
+    // If we didn't read from the start, the first line is likely partial — drop it
+    if offset > 0 && !lines.is_empty() {
+        lines.remove(0);
+    }
+
+    // Take the last n lines
+    if lines.len() > n {
+        lines.drain(..lines.len() - n);
+    }
+    lines
+}
+
 async fn service_remove() -> Json<ActionResponse> {
-    match service::stop() {
-        Ok(()) => Json(ActionResponse::success()),
-        Err(e) => Json(ActionResponse::error(format!("Failed to remove daemon service: {e}"))),
+    match tokio::task::spawn_blocking(service::stop).await {
+        Ok(Ok(())) => Json(ActionResponse::success()),
+        Ok(Err(e)) => Json(ActionResponse::error(format!("Failed to remove daemon service: {e}"))),
+        Err(e) => Json(ActionResponse::error(format!("Internal error: {e}"))),
     }
 }
 
@@ -172,7 +206,7 @@ async fn service_uninstall(State(state): State<Arc<AppState>>) -> Json<ActionRes
     let mut warnings = Vec::new();
 
     // Stop daemon
-    let _ = service::stop();
+    let _ = tokio::task::spawn_blocking(service::stop).await;
 
     // Try to delete server record
     let client = reqwest::Client::new();
@@ -264,8 +298,6 @@ mod tests {
     fn test_status_response_serialization() {
         let resp = StatusResponse {
             client_id: "abc123".into(),
-            client_name: String::new(),
-            location: String::new(),
             server_url: "https://ping.beric.ca".into(),
             daemon_running: true,
             agent_version: "0.1.0".into(),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { localAgent, type AgentStatus, type AgentLogs } from "@/lib/local-agent";
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
 export function LocalClientPanel({ onUninstalled }: Props) {
   const [detected, setDetected] = useState<boolean | null>(null); // null = loading
   const [status, setStatus] = useState<AgentStatus | null>(null);
-  const [busy, setBusy] = useState<string | null>(null); // action label being executed
+  const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [logs, setLogs] = useState<AgentLogs | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -20,15 +20,20 @@ export function LocalClientPanel({ onUninstalled }: Props) {
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   };
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
       const s = await localAgent.status();
-      setStatus(s);
+      setStatus((prev) => {
+        if (prev && prev.daemon_running === s.daemon_running && prev.uptime_s === s.uptime_s) {
+          return prev;
+        }
+        return s;
+      });
       setDetected(true);
     } catch {
-      // agent went away
+      setDetected(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     localAgent.detect().then((s) => {
@@ -41,11 +46,23 @@ export function LocalClientPanel({ onUninstalled }: Props) {
       }
     });
 
+    // Pause polling when tab is hidden
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearInterval(pollRef.current);
+      } else {
+        fetchStatus();
+        pollRef.current = setInterval(fetchStatus, 5000);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       clearInterval(pollRef.current);
       clearTimeout(toastTimerRef.current);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchStatus]);
 
   const runAction = async (label: string, action: () => Promise<{ ok: boolean; error?: string; warnings?: string[] }>) => {
     setBusy(label);
@@ -74,23 +91,16 @@ export function LocalClientPanel({ onUninstalled }: Props) {
 
   const handleFullUninstall = () => {
     if (!confirm("This will remove all PingPulse services, config, and logs from this machine and delete the client from the server. This cannot be undone. Continue?")) return;
-    setBusy("Full Uninstall");
-    localAgent.serviceUninstall()
-      .then((res) => {
-        if (!res.ok) {
-          showToast(`Error: ${res.error ?? "unknown error"}`);
-          setBusy(null);
-        } else {
-          setDetected(false);
-          setStatus(null);
-          clearInterval(pollRef.current);
-          onUninstalled();
-        }
-      })
-      .catch((e) => {
-        showToast(`Error: ${e instanceof Error ? e.message : String(e)}`);
-        setBusy(null);
-      });
+    runAction("Full Uninstall", async () => {
+      const res = await localAgent.serviceUninstall();
+      if (res.ok) {
+        setDetected(false);
+        setStatus(null);
+        clearInterval(pollRef.current);
+        onUninstalled();
+      }
+      return res;
+    });
   };
 
   const handleViewLogs = async () => {
@@ -155,7 +165,7 @@ export function LocalClientPanel({ onUninstalled }: Props) {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-zinc-200">
-                {status?.client_name ?? "Local Client"}
+                {status?.client_id ? `Client ${status.client_id.slice(0, 8)}` : "Local Client"}
               </h2>
               <span className="rounded-full border border-emerald-700/60 bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-400">
                 local
@@ -163,7 +173,7 @@ export function LocalClientPanel({ onUninstalled }: Props) {
             </div>
             {status && (
               <p className="mt-0.5 font-mono text-xs text-zinc-500">
-                {status.location} · v{status.agent_version} · uptime {formatUptime(status.uptime_s)}
+                v{status.agent_version} · uptime {formatUptime(status.uptime_s)}
               </p>
             )}
           </div>
