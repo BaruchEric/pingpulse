@@ -23,7 +23,7 @@ The agent is ultra-lightweight — just an HTTP listener + process management. I
 | Platform | Daemon Service | Agent Service |
 |----------|---------------|---------------|
 | macOS | `~/Library/LaunchAgents/ca.beric.pingpulse.plist` | `~/Library/LaunchAgents/ca.beric.pingpulse.agent.plist` |
-| Linux | `/etc/systemd/system/pingpulse.service` | `/etc/systemd/system/pingpulse-agent.service` |
+| Linux | `~/.config/systemd/user/pingpulse.service` | `~/.config/systemd/user/pingpulse-agent.service` |
 | Windows | `PingPulse` Windows Service | `PingPulseAgent` Windows Service |
 
 Both services are installed by `install.sh` / `install.ps1`. Both start on boot. Agent survives daemon stop/restart.
@@ -36,6 +36,7 @@ Both services are installed by `install.sh` / `install.ps1`. Both start on boot.
 - Binds to `127.0.0.1` only (not exposed to network)
 - CORS `Access-Control-Allow-Origin` restricted to the PingPulse server domain (read from `config.toml`'s `server_url`)
 - No additional auth — localhost access implies machine-level trust
+- **Mixed content:** Dashboard is HTTPS, agent is HTTP. Browsers treat `localhost` as a secure context, so `fetch("http://localhost:9111")` from HTTPS pages works without being blocked.
 
 ### Endpoints
 
