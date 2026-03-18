@@ -6,6 +6,7 @@ import type { Client } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RegisterDialog } from "@/components/RegisterDialog";
 import { EditClientDialog } from "@/components/EditClientDialog";
+import { LocalClientPanel } from "@/components/LocalClientPanel";
 
 export function Clients() {
   const { data: clients, refresh } = useClients(10_000);
@@ -48,6 +49,8 @@ export function Clients() {
           </button>
         </div>
       </div>
+
+      <LocalClientPanel onUninstalled={refresh} />
 
       {clients && clients.length > 0 ? (
         <div className="overflow-x-auto rounded-lg border border-zinc-800">
