@@ -8,6 +8,8 @@ import { alertRoutes } from "@/api/alerts";
 import { speedtestRoutes } from "@/api/speedtest";
 import { exportRoutes } from "@/api/export";
 import { commandRoutes } from "@/api/command";
+import { hashString } from "@/utils/hash";
+import { deleteClientCascade } from "@/utils/client-db";
 
 export function createRouter() {
   const app = new Hono<AppEnv>();
@@ -22,6 +24,38 @@ export function createRouter() {
 
   // Auth routes (handle their own auth internally)
   app.route("/api/auth", authRoutes);
+
+  // Client self-delete (authenticated with client secret, not admin JWT)
+  app.delete("/api/clients/:id/self", async (c) => {
+    const id = c.req.param("id");
+    const authHeader = c.req.header("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return c.json({ error: "Missing or invalid Authorization header" }, 401);
+    }
+    const secret = authHeader.slice(7);
+
+    const client = await c.env.DB.prepare(
+      "SELECT id, secret_hash FROM clients WHERE id = ?"
+    )
+      .bind(id)
+      .first<{ id: string; secret_hash: string }>();
+
+    if (!client) {
+      return c.json({ error: "Client not found" }, 404);
+    }
+
+    const secretHash = await hashString(secret);
+    if (secretHash !== client.secret_hash) {
+      return c.json({ error: "Invalid client secret" }, 403);
+    }
+
+    const { deleted } = await deleteClientCascade(c.env.DB, id);
+    if (!deleted) {
+      return c.json({ error: "Client not found" }, 404);
+    }
+
+    return c.json({ ok: true });
+  });
 
   // Protected routes — auth applied per-route-file via .use("*", authGuard)
   app.route("/api/clients", clientRoutes);

@@ -16,12 +16,19 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             name: pingpulse-darwin-arm64
+            cross: false
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             name: pingpulse-linux-amd64
+            cross: false
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             name: pingpulse-linux-arm64
+            cross: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: pingpulse-windows-amd64
+            cross: false
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -33,25 +40,42 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install cargo-zigbuild
+        if: matrix.cross
         run: pip3 install cargo-zigbuild
 
       - name: Install Zig
+        if: matrix.cross
         uses: goto-bus-stop/setup-zig@v2
 
-      - name: Build
+      - name: Build (native)
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --target ${{ matrix.target }}
+        working-directory: client
+
+      - name: Build (cross)
+        if: matrix.cross
         run: cargo zigbuild --release --target ${{ matrix.target }}
         working-directory: client
 
-      - name: Package
+      - name: Package (unix)
+        if: runner.os != 'Windows'
         run: |
-          cp client/target/${{ matrix.target }}/release/pingpulse ${{ matrix.name }}
-          chmod +x ${{ matrix.name }}
+          cp client/target/${{ matrix.target }}/release/pingpulse pingpulse
+          chmod +x pingpulse
+          tar -czf ${{ matrix.name }}.tar.gz pingpulse
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item "client/target/${{ matrix.target }}/release/pingpulse.exe" "pingpulse.exe"
+          Compress-Archive -Path "pingpulse.exe" -DestinationPath "${{ matrix.name }}.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: ${{ matrix.name }}
+          path: ${{ runner.os == 'Windows' && format('{0}.zip', matrix.name) || format('{0}.tar.gz', matrix.name) }}
 
   release:
     needs: build
@@ -64,7 +88,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            pingpulse-darwin-arm64/pingpulse-darwin-arm64
-            pingpulse-linux-amd64/pingpulse-linux-amd64
-            pingpulse-linux-arm64/pingpulse-linux-arm64
+            pingpulse-darwin-arm64/pingpulse-darwin-arm64.tar.gz
+            pingpulse-linux-amd64/pingpulse-linux-amd64.tar.gz
+            pingpulse-linux-arm64/pingpulse-linux-arm64.tar.gz
+            pingpulse-windows-amd64/pingpulse-windows-amd64.zip
           generate_release_notes: true

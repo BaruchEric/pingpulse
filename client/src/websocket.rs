@@ -25,10 +25,14 @@ fn now_ms() -> u64 {
 }
 
 /// Run the main WebSocket event loop with auto-reconnect.
+/// Max consecutive connection failures (401/auth errors) before assuming deregistered.
+const MAX_AUTH_FAILURES: u32 = 3;
+
 pub async fn run(config: Config) -> anyhow::Result<()> {
     let http = reqwest::Client::new();
     let mut config = config;
     let mut backoff = Backoff::new();
+    let mut consecutive_auth_failures: u32 = 0;
 
     loop {
         match connect_and_run(&mut config, &http, &mut backoff).await {
@@ -36,7 +40,13 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                 info!(event = "shutdown", reason = "signal");
                 return Ok(());
             }
+            Ok(Shutdown::Deregistered) => {
+                warn!(event = "deregistered", message = "Client has been deleted from the server, stopping");
+                stop_service();
+                return Ok(());
+            }
             Ok(Shutdown::Disconnected) => {
+                consecutive_auth_failures = 0;
                 let delay = backoff.next_delay();
                 warn!(
                     event = "ws_disconnected",
@@ -45,6 +55,30 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                 time::sleep(delay).await;
             }
             Err(e) => {
+                let err_str = e.to_string();
+                let is_auth_failure = err_str.contains("401")
+                    || err_str.contains("Unauthorized")
+                    || err_str.contains("403");
+
+                if is_auth_failure {
+                    consecutive_auth_failures += 1;
+                    warn!(
+                        event = "ws_auth_failure",
+                        consecutive = consecutive_auth_failures,
+                        max = MAX_AUTH_FAILURES,
+                    );
+                    if consecutive_auth_failures >= MAX_AUTH_FAILURES {
+                        warn!(
+                            event = "deregistered_inferred",
+                            message = "Too many consecutive auth failures, assuming client was deleted"
+                        );
+                        stop_service();
+                        return Ok(());
+                    }
+                } else {
+                    consecutive_auth_failures = 0;
+                }
+
                 let delay = backoff.next_delay();
                 error!(
                     event = "ws_error",
@@ -57,9 +91,18 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     }
 }
 
+/// Best-effort attempt to stop the OS service (launchd/systemd).
+fn stop_service() {
+    info!(event = "stopping_service", message = "Attempting to remove OS service");
+    if let Err(e) = crate::service::stop() {
+        warn!(event = "service_stop_error", error = %e);
+    }
+}
+
 enum Shutdown {
     Graceful,
     Disconnected,
+    Deregistered,
 }
 
 async fn connect_and_run(
@@ -110,14 +153,16 @@ async fn connect_and_run(
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<IncomingMessage>(text.as_ref()) {
                             Ok(incoming) => {
-                                handle_message(
+                                if let Some(shutdown) = handle_message(
                                     incoming,
                                     config,
                                     http,
                                     &mut sink,
                                     &mut ping_interval,
                                     &speed_tx,
-                                ).await;
+                                ).await {
+                                    return Ok(shutdown);
+                                }
                             }
                             Err(e) => {
                                 warn!(event = "ws_parse_error", error = %e, raw = %text);
@@ -172,7 +217,7 @@ async fn handle_message(
     sink: &mut WsSink,
     ping_interval: &mut time::Interval,
     speed_tx: &mpsc::UnboundedSender<OutgoingMessage>,
-) {
+) -> Option<Shutdown> {
     match msg {
         IncomingMessage::Ping { id, ts, .. } => {
             let pong = OutgoingMessage::Pong { id: id.clone(), ts, client_ts: now_ms() };
@@ -216,6 +261,11 @@ async fn handle_message(
             );
         }
 
+        IncomingMessage::Deregistered { reason } => {
+            warn!(event = "deregistered_by_server", reason = %reason);
+            return Some(Shutdown::Deregistered);
+        }
+
         IncomingMessage::StartSpeedTest { test_type } => {
             let http = http.clone();
             let base_url = config.server.base_url.clone();
@@ -250,6 +300,7 @@ async fn handle_message(
             });
         }
     }
+    None
 }
 
 // --- Backoff ---

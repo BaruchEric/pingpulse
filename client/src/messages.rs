@@ -46,6 +46,9 @@ pub enum IncomingMessage {
     StartSpeedTest {
         test_type: SpeedTestType,
     },
+    Deregistered {
+        reason: String,
+    },
 }
 
 // --- Outgoing messages (to server) ---
@@ -110,6 +113,18 @@ mod tests {
                 assert_eq!(test_type, SpeedTestType::Full);
             }
             _ => panic!("Expected StartSpeedTest"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_deregistered() {
+        let json = r#"{"type":"deregistered","reason":"Client deleted by admin"}"#;
+        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            IncomingMessage::Deregistered { reason } => {
+                assert_eq!(reason, "Client deleted by admin");
+            }
+            _ => panic!("Expected Deregistered"),
         }
     }
 

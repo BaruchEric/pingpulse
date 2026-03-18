@@ -83,6 +83,13 @@ try {
         exit 1
     }
 
+    Write-Host "Starting pingpulse management agent..."
+    try {
+        & "$installDir\pingpulse.exe" agent --install
+    } catch {
+        Write-Host "Warning: Failed to install agent service. Local management via dashboard unavailable."
+    }
+
     Write-Host ""
     Write-Host "Done! Client '${name}' is registered and running."
     Write-Host "View it on your dashboard at ${server}/clients"

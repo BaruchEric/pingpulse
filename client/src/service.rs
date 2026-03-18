@@ -19,6 +19,67 @@ pub fn install_and_start(binary_path: &str) -> Result<()> {
     }
 }
 
+/// Install and start the agent as a user service.
+#[allow(dead_code)]
+pub fn install_agent(binary_path: &str) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    return install_agent_launchd(binary_path);
+
+    #[cfg(target_os = "linux")]
+    return install_agent_systemd(binary_path);
+
+    #[cfg(target_os = "windows")]
+    {
+        bail!("Windows agent service not supported in v1");
+    }
+}
+
+/// Stop and uninstall the agent service.
+pub fn stop_agent() -> Result<()> {
+    #[cfg(target_os = "macos")]
+    return stop_agent_launchd();
+
+    #[cfg(target_os = "linux")]
+    return stop_agent_systemd();
+
+    #[cfg(target_os = "windows")]
+    {
+        bail!("Windows agent service not supported in v1");
+    }
+}
+
+/// Check if the agent service is currently running.
+#[allow(dead_code)]
+pub fn status_agent() -> Result<bool> {
+    #[cfg(target_os = "macos")]
+    return status_agent_launchd();
+
+    #[cfg(target_os = "linux")]
+    return status_agent_systemd();
+
+    #[cfg(target_os = "windows")]
+    {
+        bail!("Windows agent service not supported in v1");
+    }
+}
+
+/// Stop and uninstall both daemon and agent services.
+#[allow(dead_code)]
+pub fn uninstall_all() -> Result<()> {
+    let _ = stop(); // ignore error if already stopped
+    stop_agent()
+}
+
+/// Remove the PingPulse data directory.
+pub fn cleanup_data() -> Result<()> {
+    let dir = crate::config::Config::config_dir();
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).context("Failed to remove PingPulse data directory")?;
+        info!(event = "data_cleaned", path = %dir.display());
+    }
+    Ok(())
+}
+
 /// Stop and uninstall the daemon service.
 pub fn stop() -> Result<()> {
     #[cfg(target_os = "macos")]
@@ -148,6 +209,106 @@ fn status_launchd() -> Result<bool> {
     Ok(output.status.success())
 }
 
+// --- macOS (launchd) — agent ---
+
+#[cfg(target_os = "macos")]
+const AGENT_PLIST_LABEL: &str = "ca.beric.pingpulse.agent";
+
+#[cfg(target_os = "macos")]
+fn agent_plist_path() -> PathBuf {
+    dirs::home_dir()
+        .expect("No home directory")
+        .join("Library/LaunchAgents/ca.beric.pingpulse.agent.plist")
+}
+
+#[cfg(target_os = "macos")]
+fn install_agent_launchd(binary_path: &str) -> Result<()> {
+    let logs_dir = crate::config::Config::logs_dir();
+    std::fs::create_dir_all(&logs_dir)?;
+
+    let plist = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{AGENT_PLIST_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{binary_path}</string>
+        <string>agent</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{stdout}</string>
+    <key>StandardErrorPath</key>
+    <string>{stderr}</string>
+</dict>
+</plist>"#,
+        stdout = logs_dir.join("agent-stdout.log").display(),
+        stderr = logs_dir.join("agent-stderr.log").display(),
+    );
+
+    let path = agent_plist_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, plist)?;
+
+    let output = Command::new("launchctl")
+        .args(["load", path.to_str().unwrap()])
+        .output()
+        .context("Failed to run launchctl")?;
+
+    if !output.status.success() {
+        bail!(
+            "launchctl load failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    info!(event = "agent_installed", method = "launchd");
+    println!("PingPulse agent installed and started.");
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn stop_agent_launchd() -> Result<()> {
+    let path = agent_plist_path();
+    if !path.exists() {
+        bail!("Agent plist not found at {}", path.display());
+    }
+
+    let output = Command::new("launchctl")
+        .args(["unload", path.to_str().unwrap()])
+        .output()
+        .context("Failed to run launchctl")?;
+
+    if !output.status.success() {
+        bail!(
+            "launchctl unload failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    std::fs::remove_file(&path)?;
+    println!("PingPulse agent stopped and removed.");
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn status_agent_launchd() -> Result<bool> {
+    let output = Command::new("launchctl")
+        .args(["list", AGENT_PLIST_LABEL])
+        .output()
+        .context("Failed to run launchctl")?;
+
+    Ok(output.status.success())
+}
+
 // --- Linux (systemd) ---
 
 #[cfg(target_os = "linux")]
@@ -227,6 +388,91 @@ fn stop_systemd() -> Result<()> {
 fn status_systemd() -> Result<bool> {
     let output = Command::new("systemctl")
         .args(["--user", "is-active", "--quiet", "pingpulse"])
+        .output()
+        .context("Failed to run systemctl")?;
+
+    Ok(output.status.success())
+}
+
+// --- Linux (systemd) — agent ---
+
+#[cfg(target_os = "linux")]
+fn agent_service_path() -> PathBuf {
+    dirs::home_dir()
+        .expect("No home directory")
+        .join(".config/systemd/user/pingpulse-agent.service")
+}
+
+#[cfg(target_os = "linux")]
+fn install_agent_systemd(binary_path: &str) -> Result<()> {
+    let unit = format!(
+        r#"[Unit]
+Description=PingPulse Agent (Local Management API)
+After=network-online.target
+
+[Service]
+ExecStart={binary_path} agent
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+"#
+    );
+
+    let path = agent_service_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, unit)?;
+
+    Command::new("systemctl")
+        .args(["--user", "daemon-reload"])
+        .output()?;
+
+    let output = Command::new("systemctl")
+        .args(["--user", "enable", "--now", "pingpulse-agent"])
+        .output()
+        .context("Failed to run systemctl")?;
+
+    if !output.status.success() {
+        bail!(
+            "systemctl enable failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    println!("PingPulse agent installed and started.");
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn stop_agent_systemd() -> Result<()> {
+    Command::new("systemctl")
+        .args(["--user", "stop", "pingpulse-agent"])
+        .output()?;
+
+    Command::new("systemctl")
+        .args(["--user", "disable", "pingpulse-agent"])
+        .output()?;
+
+    let path = agent_service_path();
+    if path.exists() {
+        std::fs::remove_file(&path)?;
+    }
+
+    Command::new("systemctl")
+        .args(["--user", "daemon-reload"])
+        .output()?;
+
+    println!("PingPulse agent stopped and removed.");
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn status_agent_systemd() -> Result<bool> {
+    let output = Command::new("systemctl")
+        .args(["--user", "is-active", "--quiet", "pingpulse-agent"])
         .output()
         .context("Failed to run systemctl")?;
 

@@ -108,6 +108,13 @@ if ! pingpulse start; then
   exit 1
 fi
 
+# --- Install and start agent service ---
+echo "Starting pingpulse management agent..."
+if ! pingpulse agent --install; then
+  echo "Warning: Failed to install agent service. Local management via dashboard unavailable."
+  echo "You can start it manually with: pingpulse agent"
+fi
+
 echo ""
 echo "Done! Client '${NAME}' is registered and running."
 echo "View it on your dashboard at ${SERVER}/clients"

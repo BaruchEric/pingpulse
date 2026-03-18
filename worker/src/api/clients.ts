@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
+import { deleteClientCascade } from "@/utils/client-db";
 
 export const clientRoutes = new Hono<AppEnv>();
 
@@ -145,17 +146,22 @@ clientRoutes.put("/:id", async (c) => {
 clientRoutes.delete("/:id", async (c) => {
   const id = c.req.param("id");
 
-  const results = await c.env.DB.batch([
-    c.env.DB.prepare("DELETE FROM ping_results WHERE client_id = ?").bind(id),
-    c.env.DB.prepare("DELETE FROM speed_tests WHERE client_id = ?").bind(id),
-    c.env.DB.prepare("DELETE FROM outages WHERE client_id = ?").bind(id),
-    c.env.DB.prepare("DELETE FROM alerts WHERE client_id = ?").bind(id),
-    c.env.DB.prepare("DELETE FROM clients WHERE id = ?").bind(id),
-  ]);
-
-  const clientDeleteResult = results[results.length - 1];
-  if (!clientDeleteResult.meta.changes) {
+  const { deleted } = await deleteClientCascade(c.env.DB, id);
+  if (!deleted) {
     return c.json({ error: "Client not found" }, 404);
+  }
+
+  // Notify connected agent after confirming client exists (best-effort)
+  try {
+    const doId = c.env.CLIENT_MONITOR.idFromName(id);
+    const stub = c.env.CLIENT_MONITOR.get(doId);
+    await stub.fetch(new Request("http://do/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: "deregister" }),
+    }));
+  } catch {
+    // Best effort — agent may not be connected
   }
 
   return c.json({ ok: true });
