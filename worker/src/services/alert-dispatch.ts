@@ -1,10 +1,11 @@
 import type { Env } from "@/index";
+import type { AlertType, AlertSeverity } from "@/types";
 
 export interface AlertPayload {
   alert_id: string;
   client_id: string;
-  type: string;
-  severity: string;
+  type: AlertType;
+  severity: AlertSeverity;
   value: number;
   threshold: number;
   timestamp: string;
@@ -62,8 +63,8 @@ async function sendEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "PingPulse <alerts@ping.beric.ca>",
-        to: ["admin@beric.ca"],
+        from: env.ALERT_FROM_EMAIL || "PingPulse <alerts@ping.beric.ca>",
+        to: [env.ALERT_TO_EMAIL || "admin@beric.ca"],
         subject: `[PingPulse] ${alert.severity.toUpperCase()}: ${alert.type.replace(/_/g, " ")}`,
         text: message,
       }),
@@ -83,7 +84,6 @@ async function sendTelegram(env: Env, message: string): Promise<void> {
         body: JSON.stringify({
           chat_id: env.TELEGRAM_CHAT_ID,
           text: message,
-          parse_mode: "HTML",
         }),
       }
     );

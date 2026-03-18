@@ -37,16 +37,20 @@ export interface SpeedTestResult {
   duration_ms: number;
 }
 
+export type AlertType =
+  | "client_down"
+  | "client_up"
+  | "high_latency"
+  | "packet_loss"
+  | "speed_degradation"
+  | "latency_recovered";
+
+export type AlertSeverity = "critical" | "warning" | "info";
+
 export interface AlertRecord {
   client_id: string;
-  type:
-    | "client_down"
-    | "client_up"
-    | "high_latency"
-    | "packet_loss"
-    | "speed_degradation"
-    | "latency_recovered";
-  severity: "critical" | "warning" | "info";
+  type: AlertType;
+  severity: AlertSeverity;
   value: number;
   threshold: number;
   timestamp: string;
@@ -60,6 +64,12 @@ export interface ClientRecord {
   config_json: string;
   created_at: string;
   last_seen: string;
+}
+
+export interface JwtPayload {
+  sub: string;
+  iat: number;
+  exp: number;
 }
 
 export type WSMessage =

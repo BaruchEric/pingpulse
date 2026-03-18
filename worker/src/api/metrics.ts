@@ -1,36 +1,37 @@
 import { Hono } from "hono";
-import type { Env } from "@/index";
+import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
 
-export const metricsRoutes = new Hono<{ Bindings: Env }>();
+export const metricsRoutes = new Hono<AppEnv>();
 
 metricsRoutes.use("*", authGuard);
 
-// GET /api/clients/:id/metrics?from=ISO&to=ISO
-metricsRoutes.get("/:id/metrics", async (c) => {
+// GET /api/metrics/:id?from=ISO&to=ISO
+metricsRoutes.get("/:id", async (c) => {
   const id = c.req.param("id");
   const from =
     c.req.query("from") ||
     new Date(Date.now() - 3600_000).toISOString();
   const to = c.req.query("to") || new Date().toISOString();
 
-  const { results: pings } = await c.env.DB.prepare(
-    "SELECT timestamp, rtt_ms, jitter_ms, direction, status FROM ping_results WHERE client_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC"
-  )
-    .bind(id, from, to)
-    .all();
-
-  const { results: speedTests } = await c.env.DB.prepare(
-    "SELECT timestamp, type, download_mbps, upload_mbps, payload_bytes, duration_ms FROM speed_tests WHERE client_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC"
-  )
-    .bind(id, from, to)
-    .all();
-
-  const { results: outages } = await c.env.DB.prepare(
-    "SELECT start_ts, end_ts, duration_s FROM outages WHERE client_id = ? AND start_ts BETWEEN ? AND ? ORDER BY start_ts DESC"
-  )
-    .bind(id, from, to)
-    .all();
+  const [{ results: pings }, { results: speedTests }, { results: outages }] =
+    await Promise.all([
+      c.env.DB.prepare(
+        "SELECT timestamp, rtt_ms, jitter_ms, direction, status FROM ping_results WHERE client_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC"
+      )
+        .bind(id, from, to)
+        .all(),
+      c.env.DB.prepare(
+        "SELECT timestamp, type, download_mbps, upload_mbps, payload_bytes, duration_ms FROM speed_tests WHERE client_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC"
+      )
+        .bind(id, from, to)
+        .all(),
+      c.env.DB.prepare(
+        "SELECT start_ts, end_ts, duration_s FROM outages WHERE client_id = ? AND start_ts BETWEEN ? AND ? ORDER BY start_ts DESC"
+      )
+        .bind(id, from, to)
+        .all(),
+    ]);
 
   // Calculate summary
   const okPings = pings.filter(
@@ -63,11 +64,11 @@ metricsRoutes.get("/:id/metrics", async (c) => {
   return c.json({ pings, speed_tests: speedTests, outages, summary });
 });
 
-// GET /api/clients/:id/logs?limit=50&offset=0
+// GET /api/metrics/:id/logs?limit=50&offset=0
 metricsRoutes.get("/:id/logs", async (c) => {
   const id = c.req.param("id");
-  const limit = parseInt(c.req.query("limit") || "50");
-  const offset = parseInt(c.req.query("offset") || "0");
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "50") || 50, 1), 200);
+  const offset = Math.max(parseInt(c.req.query("offset") || "0") || 0, 0);
 
   const countRow = await c.env.DB.prepare(
     "SELECT COUNT(*) as total FROM ping_results WHERE client_id = ?"

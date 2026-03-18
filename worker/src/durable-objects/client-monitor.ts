@@ -8,17 +8,21 @@ import type {
 } from "@/types";
 import { DEFAULT_CLIENT_CONFIG } from "@/types";
 import { hashString } from "@/utils/hash";
+import { dispatchAlert } from "@/services/alert-dispatch";
 
 interface PingInFlight {
   id: string;
   sent_ts: number;
 }
 
+const PING_TIMEOUT_MS = 10_000;
+const LOSS_WINDOW_SIZE = 20;
+
 export class ClientMonitor implements DurableObject {
   private state: DurableObjectState;
   private env: Env;
   private sessions: WebSocket[] = [];
-  private clientId: string | null = null;
+  private clientId: string = "";
   private config: ClientConfig = DEFAULT_CLIENT_CONFIG;
   private pingBuffer: PingResult[] = [];
   private recentRTTs: number[] = [];
@@ -28,16 +32,24 @@ export class ClientMonitor implements DurableObject {
   private disconnectedAt: number | null = null;
   private currentOutageId: string | null = null;
   private lastAlertTimes: Map<string, number> = new Map();
+  // Fixed-size ring buffer for packet loss tracking (independent of flush)
+  private lossRing: Array<"ok" | "timeout" | "error"> = [];
+  private lossRingIndex: number = 0;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
+    this.clientId = state.id.name ?? "";
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    const pathParts = url.pathname.split("/");
-    this.clientId = pathParts[pathParts.length - 1] || null;
+
+    // Fallback: derive clientId from URL if state.id.name wasn't available
+    if (!this.clientId) {
+      const match = url.pathname.match(/\/ws\/([^/]+)/);
+      if (match) this.clientId = match[1];
+    }
 
     // Internal API calls from cron/other workers
     if (url.pathname.endsWith("/trigger-speed-test")) {
@@ -72,22 +84,22 @@ export class ClientMonitor implements DurableObject {
       await this.handleReconnect();
     }
 
-    // Update last_seen
-    await this.env.DB.prepare(
-      "UPDATE clients SET last_seen = ? WHERE id = ?"
-    )
-      .bind(new Date().toISOString(), this.clientId)
-      .run();
+    // Update last_seen and load config in parallel (independent DB calls)
+    const [, configRow] = await Promise.all([
+      this.env.DB.prepare(
+        "UPDATE clients SET last_seen = ? WHERE id = ?"
+      )
+        .bind(new Date().toISOString(), this.clientId)
+        .run(),
+      this.env.DB.prepare(
+        "SELECT config_json FROM clients WHERE id = ?"
+      )
+        .bind(this.clientId)
+        .first<{ config_json: string }>(),
+    ]);
 
-    // Load client config from DB
-    const row = await this.env.DB.prepare(
-      "SELECT config_json FROM clients WHERE id = ?"
-    )
-      .bind(this.clientId)
-      .first<{ config_json: string }>();
-
-    if (row) {
-      this.config = { ...DEFAULT_CLIENT_CONFIG, ...JSON.parse(row.config_json) };
+    if (configRow) {
+      this.config = { ...DEFAULT_CLIENT_CONFIG, ...JSON.parse(configRow.config_json) };
     }
 
     // Start ping alarm if not already running
@@ -148,23 +160,11 @@ export class ClientMonitor implements DurableObject {
     _reason: string,
     _wasClean: boolean
   ): Promise<void> {
-    this.sessions = this.sessions.filter((s) => s !== ws);
-    if (this.sessions.length === 0) {
-      this.disconnectedAt = Date.now();
-      await this.state.storage.setAlarm(
-        Date.now() + this.config.grace_period_s * 1000
-      );
-    }
+    await this.handleSessionDrop(ws);
   }
 
   async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
-    this.sessions = this.sessions.filter((s) => s !== ws);
-    if (this.sessions.length === 0) {
-      this.disconnectedAt = Date.now();
-      await this.state.storage.setAlarm(
-        Date.now() + this.config.grace_period_s * 1000
-      );
-    }
+    await this.handleSessionDrop(ws);
   }
 
   async alarm(): Promise<void> {
@@ -193,7 +193,9 @@ export class ClientMonitor implements DurableObject {
       return; // Don't schedule next ping — client is disconnected
     }
 
-    // Normal ping alarm
+    // Normal ping alarm — first resolve any timed-out pings
+    this.resolveTimedOutPings();
+
     if (this.sessions.length > 0) {
       await this.sendPing();
       await this.maybeFlushBuffer();
@@ -201,6 +203,49 @@ export class ClientMonitor implements DurableObject {
         Date.now() + this.config.ping_interval_s * 1000
       );
     }
+  }
+
+  private async handleSessionDrop(ws: WebSocket): Promise<void> {
+    this.sessions = this.sessions.filter((s) => s !== ws);
+    if (this.sessions.length === 0) {
+      this.disconnectedAt = Date.now();
+      await this.state.storage.setAlarm(
+        Date.now() + this.config.grace_period_s * 1000
+      );
+    }
+  }
+
+  private resolveTimedOutPings(): void {
+    const now = Date.now();
+    for (const [pingId, ping] of this.pingsInFlight) {
+      if (now - ping.sent_ts >= PING_TIMEOUT_MS) {
+        this.pingsInFlight.delete(pingId);
+        this.recordLoss("timeout");
+        this.pingBuffer.push({
+          client_id: this.clientId,
+          timestamp: new Date(ping.sent_ts).toISOString(),
+          rtt_ms: -1,
+          jitter_ms: 0,
+          direction: "cf_to_client",
+          status: "timeout",
+        });
+      }
+    }
+  }
+
+  private recordLoss(status: "ok" | "timeout" | "error"): void {
+    if (this.lossRing.length < LOSS_WINDOW_SIZE) {
+      this.lossRing.push(status);
+    } else {
+      this.lossRing[this.lossRingIndex] = status;
+    }
+    this.lossRingIndex = (this.lossRingIndex + 1) % LOSS_WINDOW_SIZE;
+  }
+
+  private getLossPct(): number {
+    if (this.lossRing.length === 0) return 0;
+    const timeouts = this.lossRing.filter((s) => s === "timeout").length;
+    return (timeouts / this.lossRing.length) * 100;
   }
 
   private async validateSecret(secret: string): Promise<boolean> {
@@ -221,21 +266,6 @@ export class ClientMonitor implements DurableObject {
     const now = Date.now();
 
     this.pingsInFlight.set(pingId, { id: pingId, sent_ts: now });
-
-    // Timeout after 10s — mark as timeout if no pong received
-    setTimeout(() => {
-      if (this.pingsInFlight.has(pingId)) {
-        this.pingsInFlight.delete(pingId);
-        this.pingBuffer.push({
-          client_id: this.clientId!,
-          timestamp: new Date(now).toISOString(),
-          rtt_ms: -1,
-          jitter_ms: 0,
-          direction: "cf_to_client",
-          status: "timeout",
-        });
-      }
-    }, 10_000);
 
     const msg: WSMessage = { type: "ping", id: pingId, ts: now };
     for (const ws of this.sessions) {
@@ -269,7 +299,7 @@ export class ClientMonitor implements DurableObject {
     if (this.recentRTTs.length > 100) this.recentRTTs.shift();
 
     const result: PingResult = {
-      client_id: this.clientId!,
+      client_id: this.clientId,
       timestamp: new Date().toISOString(),
       rtt_ms: rtt,
       jitter_ms: Math.round(jitter * 100) / 100,
@@ -278,6 +308,7 @@ export class ClientMonitor implements DurableObject {
     };
 
     this.pingBuffer.push(result);
+    this.recordLoss("ok");
 
     // Check latency threshold
     if (rtt > this.config.alert_latency_threshold_ms) {
@@ -289,12 +320,8 @@ export class ClientMonitor implements DurableObject {
       );
     }
 
-    // Check packet loss (over last 20 pings)
-    const recentResults = this.pingBuffer.slice(-20);
-    const timeouts = recentResults.filter(
-      (r) => r.status === "timeout"
-    ).length;
-    const lossPct = (timeouts / recentResults.length) * 100;
+    // Check packet loss (over fixed ring buffer)
+    const lossPct = this.getLossPct();
     if (lossPct > this.config.alert_loss_threshold_pct) {
       await this.triggerAlert(
         "packet_loss",
@@ -432,12 +459,10 @@ export class ClientMonitor implements DurableObject {
       .bind(alertId, this.clientId, type, severity, value, threshold, timestamp)
       .run();
 
-    // Dispatch alert directly (same Worker, direct import)
     try {
-      const { dispatchAlert } = await import("@/services/alert-dispatch");
       await dispatchAlert(this.env, {
         alert_id: alertId,
-        client_id: this.clientId!,
+        client_id: this.clientId,
         type,
         severity,
         value,

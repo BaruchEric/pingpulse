@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import type { Env } from "@/index";
+import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
 
-export const clientRoutes = new Hono<{ Bindings: Env }>();
+export const clientRoutes = new Hono<AppEnv>();
 
 clientRoutes.use("*", authGuard);
 
@@ -90,20 +90,18 @@ clientRoutes.put("/:id", async (c) => {
 clientRoutes.delete("/:id", async (c) => {
   const id = c.req.param("id");
 
-  const existing = await c.env.DB.prepare(
-    "SELECT id FROM clients WHERE id = ?"
-  )
-    .bind(id)
-    .first();
-  if (!existing) return c.json({ error: "Client not found" }, 404);
-
-  await c.env.DB.batch([
+  const results = await c.env.DB.batch([
     c.env.DB.prepare("DELETE FROM ping_results WHERE client_id = ?").bind(id),
     c.env.DB.prepare("DELETE FROM speed_tests WHERE client_id = ?").bind(id),
     c.env.DB.prepare("DELETE FROM outages WHERE client_id = ?").bind(id),
     c.env.DB.prepare("DELETE FROM alerts WHERE client_id = ?").bind(id),
     c.env.DB.prepare("DELETE FROM clients WHERE id = ?").bind(id),
   ]);
+
+  const clientDeleteResult = results[results.length - 1];
+  if (!clientDeleteResult.meta.changes) {
+    return c.json({ error: "Client not found" }, 404);
+  }
 
   return c.json({ ok: true });
 });

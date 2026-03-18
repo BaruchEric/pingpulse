@@ -1,14 +1,15 @@
 import { Hono } from "hono";
-import type { Env } from "@/index";
+import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
+import { dispatchAlert } from "@/services/alert-dispatch";
 
-export const alertRoutes = new Hono<{ Bindings: Env }>();
+export const alertRoutes = new Hono<AppEnv>();
 
 alertRoutes.use("*", authGuard);
 
 alertRoutes.get("/", async (c) => {
-  const limit = parseInt(c.req.query("limit") || "50");
-  const offset = parseInt(c.req.query("offset") || "0");
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "50") || 50, 1), 200);
+  const offset = Math.max(parseInt(c.req.query("offset") || "0") || 0, 0);
   const clientId = c.req.query("client_id");
 
   let query = "SELECT * FROM alerts";
@@ -33,34 +34,36 @@ alertRoutes.put("/", async (c) => {
   }>();
 
   if (
-    body.default_latency_threshold_ms !== undefined ||
-    body.default_loss_threshold_pct !== undefined
+    body.default_latency_threshold_ms === undefined &&
+    body.default_loss_threshold_pct === undefined
   ) {
-    const { results: clients } = await c.env.DB.prepare(
-      "SELECT id, config_json FROM clients"
-    ).all();
-
-    for (const client of clients) {
-      const config = JSON.parse(client.config_json as string);
-      if (body.default_latency_threshold_ms !== undefined) {
-        config.alert_latency_threshold_ms = body.default_latency_threshold_ms;
-      }
-      if (body.default_loss_threshold_pct !== undefined) {
-        config.alert_loss_threshold_pct = body.default_loss_threshold_pct;
-      }
-      await c.env.DB.prepare(
-        "UPDATE clients SET config_json = ? WHERE id = ?"
-      )
-        .bind(JSON.stringify(config), client.id)
-        .run();
-    }
+    return c.json({ error: "Nothing to update" }, 400);
   }
+
+  // Build a single UPDATE statement instead of N individual updates
+  const updates: string[] = [];
+  const values: unknown[] = [];
+
+  // Update thresholds stored as JSON fields — use json_set for atomic update
+  if (body.default_latency_threshold_ms !== undefined) {
+    updates.push("config_json = json_set(config_json, '$.alert_latency_threshold_ms', ?)");
+    values.push(body.default_latency_threshold_ms);
+  }
+  if (body.default_loss_threshold_pct !== undefined) {
+    updates.push("config_json = json_set(config_json, '$.alert_loss_threshold_pct', ?)");
+    values.push(body.default_loss_threshold_pct);
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE clients SET ${updates.join(", ")}`
+  )
+    .bind(...values)
+    .run();
 
   return c.json({ ok: true });
 });
 
 alertRoutes.post("/test", async (c) => {
-  const { dispatchAlert } = await import("@/services/alert-dispatch");
   await dispatchAlert(c.env, {
     alert_id: "test",
     client_id: "test",

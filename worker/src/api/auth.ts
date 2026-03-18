@@ -1,20 +1,21 @@
 import { Hono } from "hono";
-import type { Env } from "@/index";
+import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
 import { rateLimit } from "@/middleware/rate-limit";
 import { hashString } from "@/utils/hash";
 import { DEFAULT_CLIENT_CONFIG } from "@/types";
 
-export const authRoutes = new Hono<{ Bindings: Env }>();
+export const authRoutes = new Hono<AppEnv>();
 
 async function createJWT(secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const now = Math.floor(Date.now() / 1000);
   const payload = btoa(
     JSON.stringify({
       sub: "admin",
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 86400,
+      iat: now,
+      exp: now + 86400,
     })
   );
 
@@ -77,15 +78,7 @@ authRoutes.post("/logout", (c) => {
 });
 
 authRoutes.get("/me", authGuard, async (c) => {
-  const cookie = c.req.header("Cookie");
-  const token = cookie!
-    .split(";")
-    .find((s) => s.trim().startsWith("session="))!
-    .trim()
-    .substring("session=".length);
-
-  const [, payloadB64] = token.split(".");
-  const payload = JSON.parse(atob(payloadB64));
+  const payload = c.get("jwtPayload");
   return c.json({ sub: payload.sub, exp: payload.exp });
 });
 

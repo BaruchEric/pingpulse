@@ -1,7 +1,13 @@
 import { Context, Next } from "hono";
 import type { Env } from "@/index";
+import type { JwtPayload } from "@/types";
 
-export async function authGuard(c: Context<{ Bindings: Env }>, next: Next) {
+export type AppEnv = {
+  Bindings: Env;
+  Variables: { jwtPayload: JwtPayload };
+};
+
+export async function authGuard(c: Context<AppEnv>, next: Next) {
   const cookie = c.req.header("Cookie");
   const sessionEntry = cookie
     ?.split(";")
@@ -34,11 +40,12 @@ export async function authGuard(c: Context<{ Bindings: Env }>, next: Next) {
       return c.json({ error: "Invalid token" }, 401);
     }
 
-    const payload = JSON.parse(atob(payloadB64));
+    const payload: JwtPayload = JSON.parse(atob(payloadB64));
     if (payload.exp && payload.exp < Date.now() / 1000) {
       return c.json({ error: "Token expired" }, 401);
     }
 
+    c.set("jwtPayload", payload);
     await next();
   } catch {
     return c.json({ error: "Invalid token" }, 401);

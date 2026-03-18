@@ -1,5 +1,6 @@
 import { createRouter } from "@/api/router";
 import { ClientMonitor } from "@/durable-objects/client-monitor";
+import { archiveOldRecords } from "@/services/archiver";
 
 export { ClientMonitor };
 
@@ -10,6 +11,8 @@ export interface Env {
   CLIENT_MONITOR: DurableObjectNamespace;
   ADMIN_JWT_SECRET: string;
   RESEND_API_KEY: string;
+  ALERT_FROM_EMAIL: string;
+  ALERT_TO_EMAIL: string;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_CHAT_ID: string;
 }
@@ -37,29 +40,6 @@ export default {
       return stub.fetch(request);
     }
 
-    // Speed test payload endpoints (no auth — client uses these during test)
-    if (url.pathname === "/speedtest/download") {
-      const size = parseInt(url.searchParams.get("size") || "262144");
-      const totalSize = Math.min(size, 25 * 1024 * 1024);
-      const payload = new Uint8Array(totalSize);
-      // getRandomValues() has a 64KB limit per call
-      const CHUNK = 65536;
-      for (let i = 0; i < totalSize; i += CHUNK) {
-        const end = Math.min(i + CHUNK, totalSize);
-        crypto.getRandomValues(payload.subarray(i, end));
-      }
-      return new Response(payload, {
-        headers: { "Content-Type": "application/octet-stream" },
-      });
-    }
-
-    if (url.pathname === "/speedtest/upload" && request.method === "POST") {
-      const body = await request.arrayBuffer();
-      return new Response(JSON.stringify({ received_bytes: body.byteLength }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
     return app.fetch(request, env, ctx);
   },
 
@@ -68,28 +48,25 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<void> {
-    const { archiveOldRecords } = await import("@/services/archiver");
-
-    // Trigger full speed test on each connected client
+    // Only fan out to recently active clients
     const { results: clients } = await env.DB.prepare(
-      "SELECT id FROM clients"
-    ).all();
+      "SELECT id FROM clients WHERE last_seen > ?"
+    )
+      .bind(new Date(Date.now() - 86400_000).toISOString())
+      .all();
 
-    for (const client of clients) {
-      const doId = env.CLIENT_MONITOR.idFromName(client.id as string);
-      const stub = env.CLIENT_MONITOR.get(doId);
-      try {
-        await stub.fetch("http://internal/trigger-speed-test", {
-          method: "POST",
-        });
-      } catch {
-        // Client may not be connected
-      }
-    }
-
-    // Archive old records + clean up rate limit table
+    // Push speed test triggers and archive work into waitUntil
     ctx.waitUntil(
       Promise.all([
+        Promise.allSettled(
+          clients.map((client) => {
+            const doId = env.CLIENT_MONITOR.idFromName(client.id as string);
+            const stub = env.CLIENT_MONITOR.get(doId);
+            return stub.fetch("http://internal/trigger-speed-test", {
+              method: "POST",
+            });
+          })
+        ),
         archiveOldRecords(env, 30),
         env.DB.prepare(
           "DELETE FROM rate_limits WHERE window_start < ?"

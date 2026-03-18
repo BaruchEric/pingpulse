@@ -1,5 +1,5 @@
 import { Context, Next } from "hono";
-import type { Env } from "@/index";
+import type { AppEnv } from "@/middleware/auth-guard";
 
 interface RateLimitConfig {
   maxRequests: number;
@@ -8,11 +8,10 @@ interface RateLimitConfig {
 }
 
 export function rateLimit(config: RateLimitConfig) {
-  return async (c: Context<{ Bindings: Env }>, next: Next) => {
+  return async (c: Context<AppEnv>, next: Next) => {
     const ip = c.req.header("CF-Connecting-IP") || "unknown";
-    const path = new URL(c.req.url).pathname;
     const prefix = config.prefix || "global";
-    const key = `rl:${prefix}:${ip}:${path}`;
+    const key = `rl:${prefix}:${ip}`;
     const now = new Date();
     const windowStart = new Date(
       now.getTime() - config.windowMs

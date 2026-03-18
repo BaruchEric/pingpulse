@@ -58,7 +58,7 @@ describe("GET /api/clients/:id/metrics", () => {
     const from = new Date(Date.now() - 3600_000).toISOString();
     const to = new Date().toISOString();
     const res = await app.request(
-      `/api/clients/c1/metrics?from=${from}&to=${to}`,
+      `/api/metrics/c1?from=${from}&to=${to}`,
       { headers: { Cookie: adminCookie } },
       env
     );
@@ -77,7 +77,7 @@ describe("GET /api/clients/:id/logs", () => {
 
   it("returns paginated logs", async () => {
     const res = await app.request(
-      "/api/clients/c1/logs?limit=3&offset=0",
+      "/api/metrics/c1/logs?limit=3&offset=0",
       { headers: { Cookie: adminCookie } },
       env
     );
