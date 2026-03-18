@@ -28,5 +28,8 @@ new_classes = ["ClientMonitor"]
 [triggers]
 crons = ["0 */6 * * *"]
 
+[assets]
+directory = "./dashboard/dist"
+
 [vars]
 ADMIN_JWT_SECRET = "change-me-in-secrets"
