@@ -1,11 +1,13 @@
+#[cfg(not(target_os = "windows"))]
 use std::path::PathBuf;
+#[cfg(not(target_os = "windows"))]
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 use tracing::info;
 
 /// Install and start the daemon as a system service.
-pub fn install_and_start(binary_path: &str) -> Result<()> {
+pub fn install_and_start(#[cfg_attr(target_os = "windows", allow(unused))] binary_path: &str) -> Result<()> {
     #[cfg(target_os = "macos")]
     return install_launchd(binary_path);
 
@@ -21,7 +23,7 @@ pub fn install_and_start(binary_path: &str) -> Result<()> {
 
 /// Install and start the agent as a user service.
 #[allow(dead_code)]
-pub fn install_agent(binary_path: &str) -> Result<()> {
+pub fn install_agent(#[cfg_attr(target_os = "windows", allow(unused))] binary_path: &str) -> Result<()> {
     #[cfg(target_os = "macos")]
     return install_agent_launchd(binary_path);
 
