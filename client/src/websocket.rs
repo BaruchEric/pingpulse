@@ -1,0 +1,322 @@
+use std::time::Duration;
+
+use futures_util::{SinkExt, StreamExt};
+use tokio::time::{self};
+use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tracing::{info, warn, error};
+
+use crate::config::Config;
+use crate::messages::{IncomingMessage, OutgoingMessage, SpeedTestType};
+use crate::speed_test;
+
+/// Run the main WebSocket event loop with auto-reconnect.
+pub async fn run(config: Config) -> anyhow::Result<()> {
+    let http = reqwest::Client::new();
+    let mut config = config;
+    let mut backoff = Backoff::new();
+
+    loop {
+        match connect_and_run(&mut config, &http, &mut backoff).await {
+            Ok(Shutdown::Graceful) => {
+                info!(event = "shutdown", reason = "signal");
+                return Ok(());
+            }
+            Ok(Shutdown::Disconnected) => {
+                let delay = backoff.next_delay();
+                warn!(
+                    event = "ws_disconnected",
+                    reconnect_in_ms = delay.as_millis() as u64,
+                );
+                time::sleep(delay).await;
+            }
+            Err(e) => {
+                let delay = backoff.next_delay();
+                error!(
+                    event = "ws_error",
+                    error = %e,
+                    reconnect_in_ms = delay.as_millis() as u64,
+                );
+                time::sleep(delay).await;
+            }
+        }
+    }
+}
+
+enum Shutdown {
+    Graceful,
+    Disconnected,
+}
+
+async fn connect_and_run(
+    config: &mut Config,
+    http: &reqwest::Client,
+    backoff: &mut Backoff,
+) -> anyhow::Result<Shutdown> {
+    // Build WebSocket URL
+    let base = &config.server.base_url;
+    let ws_path = &config.server.ws_url;
+    let ws_url = base
+        .replace("https://", "wss://")
+        .replace("http://", "ws://")
+        + ws_path;
+
+    info!(event = "ws_connecting", url = %ws_url);
+
+    // Build request with auth header
+    let request = http::Request::builder()
+        .uri(&ws_url)
+        .header("Authorization", format!("Bearer {}", config.server.client_secret))
+        .header("Host", url::Url::parse(base)?.host_str().unwrap_or(""))
+        .header("Connection", "Upgrade")
+        .header("Upgrade", "websocket")
+        .header("Sec-WebSocket-Version", "13")
+        .header("Sec-WebSocket-Key", tokio_tungstenite::tungstenite::handshake::client::generate_key())
+        .body(())?;
+
+    let (ws_stream, _) = connect_async(request).await?;
+    let (mut sink, mut stream) = ws_stream.split();
+
+    info!(event = "ws_connected");
+    backoff.reset();
+
+    let mut ping_interval = time::interval(Duration::from_secs(config.ping.interval_s as u64));
+    ping_interval.tick().await; // Skip the immediate first tick
+    let mut ping_counter: u64 = 0;
+
+    loop {
+        tokio::select! {
+            msg = stream.next() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        match serde_json::from_str::<IncomingMessage>(text.as_ref()) {
+                            Ok(incoming) => {
+                                handle_message(
+                                    incoming,
+                                    config,
+                                    http,
+                                    &mut sink,
+                                    &mut ping_interval,
+                                ).await;
+                            }
+                            Err(e) => {
+                                warn!(event = "ws_parse_error", error = %e, raw = %text);
+                            }
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None => {
+                        return Ok(Shutdown::Disconnected);
+                    }
+                    Some(Err(e)) => {
+                        return Err(e.into());
+                    }
+                    _ => {} // Ignore binary, ping/pong frames (handled by tungstenite)
+                }
+            }
+
+            _ = ping_interval.tick() => {
+                ping_counter += 1;
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64;
+                let msg = OutgoingMessage::Ping {
+                    id: format!("client-{ping_counter}"),
+                    ts,
+                };
+                let json = serde_json::to_string(&msg).unwrap();
+                if let Err(e) = sink.send(Message::Text(json.into())).await {
+                    error!(event = "ping_send_error", error = %e);
+                    return Ok(Shutdown::Disconnected);
+                }
+                info!(event = "ping_sent", id = format!("client-{ping_counter}"));
+            }
+
+            _ = shutdown_signal() => {
+                let _ = sink.close().await;
+                return Ok(Shutdown::Graceful);
+            }
+        }
+    }
+}
+
+async fn handle_message(
+    msg: IncomingMessage,
+    config: &mut Config,
+    http: &reqwest::Client,
+    sink: &mut futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        Message,
+    >,
+    ping_interval: &mut time::Interval,
+) {
+    match msg {
+        IncomingMessage::Ping { id, ts, .. } => {
+            let client_ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            let pong = OutgoingMessage::Pong { id: id.clone(), ts, client_ts };
+            let json = serde_json::to_string(&pong).unwrap();
+            if let Err(e) = sink.send(Message::Text(json.into())).await {
+                error!(event = "pong_send_error", error = %e);
+            }
+            info!(event = "ping_reply", ping_id = %id);
+        }
+
+        IncomingMessage::Pong { id, ts, client_ts: _ } => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            // ts was our original timestamp
+            let rtt_ms = now.saturating_sub(ts);
+            info!(event = "pong_received", ping_id = %id, rtt_ms = rtt_ms);
+        }
+
+        IncomingMessage::ConfigUpdate { config: remote } => {
+            let old_interval = config.ping.interval_s;
+            let old_probe = config.speed_test.probe_size_bytes;
+            let old_full = config.speed_test.full_test_payload_bytes;
+            let old_latency = config.alerts.latency_threshold_ms;
+            let old_loss = config.alerts.loss_threshold_pct;
+            let old_grace = config.ping.grace_period_s;
+
+            config.apply_remote(&remote);
+            if let Err(e) = config.save().await {
+                error!(event = "config_save_error", error = %e);
+            }
+            if config.ping.interval_s != old_interval {
+                *ping_interval = time::interval(Duration::from_secs(config.ping.interval_s as u64));
+                ping_interval.tick().await; // Skip immediate tick
+            }
+            info!(
+                event = "config_updated",
+                ping_interval_s = config.ping.interval_s,
+                interval_changed = (config.ping.interval_s != old_interval),
+                probe_changed = (config.speed_test.probe_size_bytes != old_probe),
+                full_payload_changed = (config.speed_test.full_test_payload_bytes != old_full),
+                latency_threshold_changed = (config.alerts.latency_threshold_ms != old_latency),
+                loss_threshold_changed = (config.alerts.loss_threshold_pct != old_loss),
+                grace_period_changed = (config.ping.grace_period_s != old_grace),
+            );
+        }
+
+        IncomingMessage::StartSpeedTest { test_type } => {
+            let http = http.clone();
+            let base_url = config.server.base_url.clone();
+            let client_id = config.server.client_id.clone();
+            let probe_size = config.speed_test.probe_size_bytes;
+            let full_size = config.speed_test.full_test_payload_bytes;
+
+            let result = match test_type {
+                SpeedTestType::Probe => {
+                    speed_test::run_probe(&http, &base_url, &client_id, probe_size).await
+                }
+                SpeedTestType::Full => {
+                    speed_test::run_full(&http, &base_url, &client_id, full_size).await
+                }
+            };
+
+            match result {
+                Ok(result) => {
+                    let msg = OutgoingMessage::SpeedTestResult { result };
+                    let json = serde_json::to_string(&msg).unwrap();
+                    if let Err(e) = sink.send(Message::Text(json.into())).await {
+                        error!(event = "speed_test_send_error", error = %e);
+                    }
+                }
+                Err(e) => {
+                    error!(event = "speed_test_error", error = %e);
+                    let msg = OutgoingMessage::Error {
+                        message: format!("Speed test failed: {e}"),
+                    };
+                    let json = serde_json::to_string(&msg).unwrap();
+                    let _ = sink.send(Message::Text(json.into())).await;
+                }
+            }
+        }
+    }
+}
+
+// --- Backoff ---
+
+struct Backoff {
+    current_ms: u64,
+}
+
+impl Backoff {
+    const INITIAL_MS: u64 = 1_000;
+    const MAX_MS: u64 = 60_000;
+
+    fn new() -> Self {
+        Self { current_ms: Self::INITIAL_MS }
+    }
+
+    fn reset(&mut self) {
+        self.current_ms = Self::INITIAL_MS;
+    }
+
+    fn next_delay(&mut self) -> Duration {
+        let jitter_range = self.current_ms / 4; // ±25%
+        let jitter = if jitter_range > 0 {
+            rand::random_range(0..jitter_range * 2) as i64 - jitter_range as i64
+        } else {
+            0
+        };
+        let delay_ms = (self.current_ms as i64 + jitter).max(100) as u64;
+        self.current_ms = (self.current_ms * 2).min(Self::MAX_MS);
+        Duration::from_millis(delay_ms)
+    }
+}
+
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Failed to install SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = sigterm.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c().await.ok();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_backoff_increases() {
+        let mut b = Backoff::new();
+        let d1 = b.next_delay();
+        let d2 = b.next_delay();
+        assert!(d2.as_millis() > d1.as_millis());
+    }
+
+    #[test]
+    fn test_backoff_caps_at_max() {
+        let mut b = Backoff::new();
+        for _ in 0..20 {
+            b.next_delay();
+        }
+        let d = b.next_delay();
+        assert!(d.as_millis() <= (Backoff::MAX_MS + Backoff::MAX_MS / 4) as u128);
+    }
+
+    #[test]
+    fn test_backoff_reset() {
+        let mut b = Backoff::new();
+        b.next_delay();
+        b.next_delay();
+        b.next_delay();
+        b.reset();
+        let d = b.next_delay();
+        assert!(d.as_millis() < 2000);
+    }
+}
