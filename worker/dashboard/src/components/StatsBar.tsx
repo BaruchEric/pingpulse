@@ -1,10 +1,11 @@
 import type { Client } from "@/lib/types";
-import { THRESHOLD_STALE_MS } from "@/components/StatusBadge";
+import { getClientStatus } from "@/components/StatusBadge";
 
 export function StatsBar({ clients }: { clients: Client[] }) {
   const total = clients.length;
-  const now = Date.now();
-  const up = clients.filter((c) => now - new Date(c.last_seen).getTime() < THRESHOLD_STALE_MS).length;
+  const up = clients.filter(
+    (c) => getClientStatus(c.last_seen, c.config.grace_period_s * 1000) === "up"
+  ).length;
   const down = total - up;
 
   return (

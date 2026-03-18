@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useParams, Link } from "react-router";
 import { useClient, useMetrics, useAlerts, getTimeRange, type TimeRange } from "@/lib/hooks";
 import { api } from "@/lib/api";
@@ -12,10 +12,9 @@ import { AlertRow } from "@/components/AlertRow";
 export function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const [range, setRange] = useState<TimeRange>("24h");
-  const { from, to } = useMemo(() => getTimeRange(range), [range]);
 
   const { data: client, loading: clientLoading } = useClient(id!);
-  const { data: metrics, loading: metricsLoading } = useMetrics(id!, from, to);
+  const { data: metrics, loading: metricsLoading } = useMetrics(id!, range);
   const { data: alerts } = useAlerts(id, 10);
 
   if (clientLoading && !client) {
@@ -44,7 +43,11 @@ export function ClientDetail() {
             <h1 className="text-xl font-semibold">{client.name}</h1>
             <p className="text-sm text-zinc-500">{client.location}</p>
           </div>
-          <StatusBadge lastSeen={client.last_seen} thresholdMs={client.config.alert_latency_threshold_ms} />
+          <StatusBadge
+            lastSeen={client.last_seen}
+            gracePeriodMs={client.config.grace_period_s * 1000}
+            thresholdMs={client.config.alert_latency_threshold_ms}
+          />
         </div>
 
         <div className="flex items-center gap-3">
@@ -95,7 +98,7 @@ export function ClientDetail() {
       {/* Outage timeline */}
       {metrics && metrics.outages.length > 0 && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-          <OutageTimeline outages={metrics.outages} from={from} to={to} />
+          <OutageTimeline outages={metrics.outages} {...getTimeRange(range)} />
         </div>
       )}
 

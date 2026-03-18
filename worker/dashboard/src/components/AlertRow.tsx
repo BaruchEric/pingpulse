@@ -1,13 +1,13 @@
-import type { Alert } from "@/lib/types";
+import type { Alert, AlertSeverity } from "@/lib/types";
 
-const SEVERITY_STYLES: Record<string, string> = {
+const SEVERITY_STYLES: Record<AlertSeverity, string> = {
   critical: "text-red-400 bg-red-950/30 border-red-900/50",
   warning: "text-amber-400 bg-amber-950/30 border-amber-900/50",
   info: "text-blue-400 bg-blue-950/30 border-blue-900/50",
 };
 
 export function AlertRow({ alert }: { alert: Alert }) {
-  const style = SEVERITY_STYLES[alert.severity] || SEVERITY_STYLES.info;
+  const style = SEVERITY_STYLES[alert.severity];
   const time = new Date(alert.timestamp).toLocaleString();
   const label = alert.type.replace(/_/g, " ");
 

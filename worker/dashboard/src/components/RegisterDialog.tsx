@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { api } from "@/lib/api";
 
 export function RegisterDialog({ onClose }: { onClose: () => void }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => () => clearTimeout(copyTimerRef.current), []);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -21,7 +24,8 @@ export function RegisterDialog({ onClose }: { onClose: () => void }) {
     const cmd = `pingpulse register --token ${token}`;
     navigator.clipboard.writeText(cmd);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   return (

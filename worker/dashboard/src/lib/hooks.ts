@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
-// Types are inferred from api return types
 
 interface UsePollingResult<T> {
   data: T | null;
@@ -19,16 +18,25 @@ function usePolling<T>(
   const [loading, setLoading] = useState(true);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+  const lastJsonRef = useRef("");
 
   const refresh = useCallback(() => {
     fetcherRef.current()
-      .then((d) => { setData(d); setError(null); })
+      .then((d) => {
+        const json = JSON.stringify(d);
+        if (json !== lastJsonRef.current) {
+          lastJsonRef.current = json;
+          setData(d);
+        }
+        setError(null);
+      })
       .catch(setError)
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     refresh();
+    if (intervalMs <= 0) return;
     const id = setInterval(refresh, intervalMs);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,8 +56,31 @@ export function useClient(id: string) {
   return usePolling(() => api.getClient(id), 10_000, [id]);
 }
 
-export function useMetrics(id: string, from: string, to: string) {
-  return usePolling(() => api.getMetrics(id, from, to), 30_000, [id, from, to]);
+export type TimeRange = "1h" | "6h" | "24h" | "7d" | "30d";
+
+const RANGE_MS: Record<TimeRange, number> = {
+  "1h": 3600_000,
+  "6h": 6 * 3600_000,
+  "24h": 86400_000,
+  "7d": 7 * 86400_000,
+  "30d": 30 * 86400_000,
+};
+
+export function getTimeRange(range: TimeRange): { from: string; to: string } {
+  const to = new Date().toISOString();
+  const from = new Date(Date.now() - RANGE_MS[range]).toISOString();
+  return { from, to };
+}
+
+export function useMetrics(id: string, range: TimeRange) {
+  return usePolling(
+    () => {
+      const { from, to } = getTimeRange(range);
+      return api.getMetrics(id, from, to);
+    },
+    30_000,
+    [id, range]
+  );
 }
 
 export function useAlerts(clientId?: string, limit = 50) {
@@ -81,20 +112,4 @@ export function useAuth() {
   };
 
   return { authed, login, logout };
-}
-
-export type TimeRange = "1h" | "6h" | "24h" | "7d" | "30d";
-
-const RANGE_MS: Record<TimeRange, number> = {
-  "1h": 3600_000,
-  "6h": 6 * 3600_000,
-  "24h": 86400_000,
-  "7d": 7 * 86400_000,
-  "30d": 30 * 86400_000,
-};
-
-export function getTimeRange(range: TimeRange): { from: string; to: string } {
-  const to = new Date().toISOString();
-  const from = new Date(Date.now() - RANGE_MS[range]).toISOString();
-  return { from, to };
 }

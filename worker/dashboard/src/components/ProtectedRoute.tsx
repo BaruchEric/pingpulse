@@ -19,5 +19,5 @@ export function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return children;
 }

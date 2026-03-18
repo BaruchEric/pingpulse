@@ -1,10 +1,15 @@
-export const THRESHOLD_STALE_MS = 120_000; // 2 minutes
+export type Status = "up" | "degraded" | "down";
 
-type Status = "up" | "degraded" | "down";
+const DEFAULT_GRACE_PERIOD_MS = 120_000;
 
-function getStatus(lastSeen: string, latencyMs?: number, thresholdMs?: number): Status {
+export function getClientStatus(
+  lastSeen: string,
+  gracePeriodMs = DEFAULT_GRACE_PERIOD_MS,
+  latencyMs?: number,
+  thresholdMs?: number,
+): Status {
   const elapsed = Date.now() - new Date(lastSeen).getTime();
-  if (elapsed > THRESHOLD_STALE_MS) return "down";
+  if (elapsed > gracePeriodMs) return "down";
   if (latencyMs && thresholdMs && latencyMs > thresholdMs) return "degraded";
   return "up";
 }
@@ -17,14 +22,16 @@ const STATUS_STYLES: Record<Status, { dot: string; label: string; text: string }
 
 export function StatusBadge({
   lastSeen,
+  gracePeriodMs,
   latencyMs,
   thresholdMs,
 }: {
   lastSeen: string;
+  gracePeriodMs?: number;
   latencyMs?: number;
   thresholdMs?: number;
 }) {
-  const status = getStatus(lastSeen, latencyMs, thresholdMs);
+  const status = getClientStatus(lastSeen, gracePeriodMs, latencyMs, thresholdMs);
   const { dot, label, text } = STATUS_STYLES[status];
 
   return (

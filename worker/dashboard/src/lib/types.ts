@@ -21,7 +21,7 @@ export interface PingResult {
   timestamp: string;
   rtt_ms: number;
   jitter_ms: number;
-  direction: string;
+  direction: "cf_to_client" | "client_to_cf";
   status: "ok" | "timeout" | "error";
 }
 
@@ -60,11 +60,21 @@ export interface MetricsResponse {
   summary: MetricsSummary;
 }
 
+export type AlertType =
+  | "client_down"
+  | "client_up"
+  | "high_latency"
+  | "packet_loss"
+  | "speed_degradation"
+  | "latency_recovered";
+
+export type AlertSeverity = "critical" | "warning" | "info";
+
 export interface Alert {
   id: string;
   client_id: string;
-  type: string;
-  severity: "critical" | "warning" | "info";
+  type: AlertType;
+  severity: AlertSeverity;
   value: number;
   threshold: number;
   timestamp: string;
