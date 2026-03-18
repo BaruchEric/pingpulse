@@ -44,14 +44,15 @@ jobs:
 
       - name: Package
         run: |
-          cp client/target/${{ matrix.target }}/release/pingpulse ${{ matrix.name }}
-          chmod +x ${{ matrix.name }}
+          cp client/target/${{ matrix.target }}/release/pingpulse pingpulse
+          chmod +x pingpulse
+          tar -czf ${{ matrix.name }}.tar.gz pingpulse
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: ${{ matrix.name }}
+          path: ${{ matrix.name }}.tar.gz
 
   release:
     needs: build
@@ -64,7 +65,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            pingpulse-darwin-arm64/pingpulse-darwin-arm64
-            pingpulse-linux-amd64/pingpulse-linux-amd64
-            pingpulse-linux-arm64/pingpulse-linux-arm64
+            pingpulse-darwin-arm64/pingpulse-darwin-arm64.tar.gz
+            pingpulse-linux-amd64/pingpulse-linux-amd64.tar.gz
+            pingpulse-linux-arm64/pingpulse-linux-arm64.tar.gz
           generate_release_notes: true
