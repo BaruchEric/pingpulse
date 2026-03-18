@@ -21,7 +21,9 @@ const LOSS_WINDOW_SIZE = 20;
 export class ClientMonitor implements DurableObject {
   private state: DurableObjectState;
   private env: Env;
-  private sessions: WebSocket[] = [];
+  private get sessions(): WebSocket[] {
+    return this.state.getWebSockets();
+  }
   private clientId: string = "";
   private config: ClientConfig = DEFAULT_CLIENT_CONFIG;
   private pingBuffer: PingResult[] = [];
@@ -77,7 +79,6 @@ export class ClientMonitor implements DurableObject {
     const [client, server] = Object.values(pair);
 
     this.state.acceptWebSocket(server);
-    this.sessions.push(server);
 
     // Client connected — clear any disconnection state
     if (this.disconnectedAt) {
@@ -86,11 +87,7 @@ export class ClientMonitor implements DurableObject {
 
     // Update last_seen and load config in parallel (independent DB calls)
     const [, configRow] = await Promise.all([
-      this.env.DB.prepare(
-        "UPDATE clients SET last_seen = ? WHERE id = ?"
-      )
-        .bind(new Date().toISOString(), this.clientId)
-        .run(),
+      this.updateLastSeen(),
       this.env.DB.prepare(
         "SELECT config_json FROM clients WHERE id = ?"
       )
@@ -199,14 +196,14 @@ export class ClientMonitor implements DurableObject {
     if (this.sessions.length > 0) {
       await this.sendPing();
       await this.maybeFlushBuffer();
+      await this.updateLastSeen();
       await this.state.storage.setAlarm(
         Date.now() + this.config.ping_interval_s * 1000
       );
     }
   }
 
-  private async handleSessionDrop(ws: WebSocket): Promise<void> {
-    this.sessions = this.sessions.filter((s) => s !== ws);
+  private async handleSessionDrop(_ws: WebSocket): Promise<void> {
     if (this.sessions.length === 0) {
       this.disconnectedAt = Date.now();
       await this.state.storage.setAlarm(
@@ -374,6 +371,12 @@ export class ClientMonitor implements DurableObject {
         });
       }
     }
+  }
+
+  private async updateLastSeen(): Promise<void> {
+    await this.env.DB.prepare("UPDATE clients SET last_seen = ? WHERE id = ?")
+      .bind(new Date().toISOString(), this.clientId)
+      .run();
   }
 
   private async handleReconnect(): Promise<void> {

@@ -30,7 +30,7 @@ speedtestRoutes.post("/upload", async (c) => {
 speedtestRoutes.post(
   "/:id",
   authGuard,
-  rateLimit({ maxRequests: 1, windowMs: 300_000, prefix: "speedtest" }),
+  rateLimit({ maxRequests: 10, windowMs: 60_000, prefix: "speedtest" }),
   async (c) => {
     const clientId = c.req.param("id")!;
 

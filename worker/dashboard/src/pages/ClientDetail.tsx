@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router";
 import { useClient, useMetrics, useAlerts, getTimeRange, type TimeRange } from "@/lib/hooks";
 import { api } from "@/lib/api";
@@ -13,9 +13,28 @@ export function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const [range, setRange] = useState<TimeRange>("24h");
 
+  const [speedTestRunning, setSpeedTestRunning] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const baseCountRef = useRef<number>(0);
   const { data: client, loading: clientLoading } = useClient(id!);
-  const { data: metrics, loading: metricsLoading } = useMetrics(id!, range);
+  const { data: metrics, loading: metricsLoading, refresh: refreshMetrics } = useMetrics(id!, range);
   const { data: alerts } = useAlerts(id, 10);
+
+  const stopPolling = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = null;
+    setSpeedTestRunning(false);
+  };
+
+  // Stop polling when new speed test results arrive
+  useEffect(() => {
+    if (speedTestRunning && (metrics?.speed_tests?.length ?? 0) > baseCountRef.current) {
+      stopPolling();
+    }
+  }, [metrics?.speed_tests?.length, speedTestRunning]);
+
+  // Cleanup on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   if (clientLoading && !client) {
     return <div className="text-sm text-zinc-400">Loading...</div>;
@@ -26,10 +45,20 @@ export function ClientDetail() {
   }
 
   const handleSpeedTest = async () => {
+    if (speedTestRunning) return;
     try {
+      baseCountRef.current = metrics?.speed_tests?.length ?? 0;
+      setSpeedTestRunning(true);
       await api.triggerSpeedTest(id!);
+      // Poll every 3s for up to 60s waiting for results
+      let attempts = 0;
+      pollRef.current = setInterval(() => {
+        attempts++;
+        refreshMetrics();
+        if (attempts >= 20) stopPolling();
+      }, 3_000);
     } catch {
-      // ignore
+      setSpeedTestRunning(false);
     }
   };
 
@@ -53,9 +82,10 @@ export function ClientDetail() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleSpeedTest}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+            disabled={speedTestRunning}
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Run Speed Test
+            {speedTestRunning ? "Running..." : "Run Speed Test"}
           </button>
           <TimeRangeSelector value={range} onChange={setRange} />
         </div>
