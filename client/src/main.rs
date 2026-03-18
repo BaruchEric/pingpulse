@@ -51,6 +51,9 @@ enum Commands {
         /// Port for the local management API
         #[arg(long, default_value = "9111")]
         port: u16,
+        /// Install as a system service instead of running in foreground
+        #[arg(long)]
+        install: bool,
     },
 }
 
@@ -92,8 +95,17 @@ async fn main() {
                 }
             }
         }
-        Commands::Agent { port } => {
-            if let Err(e) = agent::run(port).await {
+        Commands::Agent { port, install } => {
+            if install {
+                let binary = std::env::current_exe()
+                    .expect("Cannot determine binary path")
+                    .to_string_lossy()
+                    .to_string();
+                if let Err(e) = service::install_agent(&binary) {
+                    eprintln!("Agent service install failed: {e}");
+                    std::process::exit(1);
+                }
+            } else if let Err(e) = agent::run(port).await {
                 eprintln!("Agent error: {e}");
                 std::process::exit(1);
             }
