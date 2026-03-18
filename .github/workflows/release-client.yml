@@ -25,6 +25,10 @@ jobs:
             os: ubuntu-latest
             name: pingpulse-linux-arm64
             cross: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: pingpulse-windows-amd64
+            cross: false
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -53,17 +57,25 @@ jobs:
         run: cargo zigbuild --release --target ${{ matrix.target }}
         working-directory: client
 
-      - name: Package
+      - name: Package (unix)
+        if: runner.os != 'Windows'
         run: |
           cp client/target/${{ matrix.target }}/release/pingpulse pingpulse
           chmod +x pingpulse
           tar -czf ${{ matrix.name }}.tar.gz pingpulse
 
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item "client/target/${{ matrix.target }}/release/pingpulse.exe" "pingpulse.exe"
+          Compress-Archive -Path "pingpulse.exe" -DestinationPath "${{ matrix.name }}.zip"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: ${{ matrix.name }}.tar.gz
+          path: ${{ runner.os == 'Windows' && format('{0}.zip', matrix.name) || format('{0}.tar.gz', matrix.name) }}
 
   release:
     needs: build
@@ -79,4 +91,5 @@ jobs:
             pingpulse-darwin-arm64/pingpulse-darwin-arm64.tar.gz
             pingpulse-linux-amd64/pingpulse-linux-amd64.tar.gz
             pingpulse-linux-arm64/pingpulse-linux-arm64.tar.gz
+            pingpulse-windows-amd64/pingpulse-windows-amd64.zip
           generate_release_notes: true
