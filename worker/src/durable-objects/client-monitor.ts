@@ -30,7 +30,6 @@ export class ClientMonitor implements DurableObject {
   private recentRTTs: number[] = [];
   private runningJitter: number = 0;
   private pingsInFlight: Map<string, PingInFlight> = new Map();
-  private lastFlush: number = Date.now();
   private lastSeenUpdatedAt: number = 0;
   private alarmEnsured: boolean = false;
   private disconnectedAt: number | null = null;
@@ -423,14 +422,11 @@ export class ClientMonitor implements DurableObject {
   }
 
   private async maybeFlushBuffer(): Promise<void> {
-    const now = Date.now();
-    const shouldFlush =
-      this.pingBuffer.length >= 5 || now - this.lastFlush >= 30_000;
-
-    if (!shouldFlush || this.pingBuffer.length === 0) return;
+    // Flush immediately — the Hibernatable WebSockets API resets in-memory
+    // state on each wake, so buffering across cycles loses data.
+    if (this.pingBuffer.length === 0) return;
 
     const batch = this.pingBuffer.splice(0);
-    this.lastFlush = now;
 
     // Batch insert to D1
     const stmt = this.env.DB.prepare(

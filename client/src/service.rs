@@ -65,19 +65,32 @@ pub fn status_agent() -> Result<bool> {
     }
 }
 
-/// Stop and uninstall both daemon and agent services.
-#[allow(dead_code)]
+/// Full teardown: stop both services, clean up data, and clear Login Items.
 pub fn uninstall_all() -> Result<()> {
     let _ = stop(); // ignore error if already stopped
-    stop_agent()
+    let _ = stop_agent(); // ignore error if not installed
+    cleanup_data()?;
+    reset_btm();
+    Ok(())
 }
+
+/// Best-effort reset of the macOS Background Task Management cache so stale
+/// entries disappear from System Settings → Login Items.
+#[cfg(target_os = "macos")]
+fn reset_btm() {
+    let _ = Command::new("sfltool").arg("resetbtm").output();
+}
+
+#[cfg(not(target_os = "macos"))]
+fn reset_btm() {}
 
 /// Remove the PingPulse data directory.
 pub fn cleanup_data() -> Result<()> {
     let dir = crate::config::Config::config_dir();
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir).context("Failed to remove PingPulse data directory")?;
-        info!(event = "data_cleaned", path = %dir.display());
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => info!(event = "data_cleaned", path = %dir.display()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(anyhow::Error::new(e).context("Failed to remove PingPulse data directory")),
     }
     Ok(())
 }
@@ -177,28 +190,28 @@ fn install_launchd(binary_path: &str) -> Result<()> {
     Ok(())
 }
 
+/// Delete a launchd plist and tell launchd to forget the service.
+///
+/// The plist is removed *before* `launchctl remove` because the remove
+/// command sends SIGTERM to the managed process — which may be us.
 #[cfg(target_os = "macos")]
-fn stop_launchd() -> Result<()> {
-    let path = plist_path();
+fn remove_launchd_service(path: PathBuf, label: &str, description: &str) -> Result<()> {
     if !path.exists() {
-        bail!("Service plist not found at {}", path.display());
-    }
-
-    let output = Command::new("launchctl")
-        .args(["unload", path.to_str().unwrap()])
-        .output()
-        .context("Failed to run launchctl")?;
-
-    if !output.status.success() {
-        bail!(
-            "launchctl unload failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        bail!("{description} plist not found at {}", path.display());
     }
 
     std::fs::remove_file(&path)?;
-    println!("PingPulse service stopped and removed.");
+
+    let _ = Command::new("launchctl")
+        .args(["remove", label])
+        .output();
+    println!("PingPulse {description} stopped and removed.");
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn stop_launchd() -> Result<()> {
+    remove_launchd_service(plist_path(), PLIST_LABEL, "service")
 }
 
 #[cfg(target_os = "macos")]
@@ -279,26 +292,7 @@ fn install_agent_launchd(binary_path: &str) -> Result<()> {
 
 #[cfg(target_os = "macos")]
 fn stop_agent_launchd() -> Result<()> {
-    let path = agent_plist_path();
-    if !path.exists() {
-        bail!("Agent plist not found at {}", path.display());
-    }
-
-    let output = Command::new("launchctl")
-        .args(["unload", path.to_str().unwrap()])
-        .output()
-        .context("Failed to run launchctl")?;
-
-    if !output.status.success() {
-        bail!(
-            "launchctl unload failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    std::fs::remove_file(&path)?;
-    println!("PingPulse agent stopped and removed.");
-    Ok(())
+    remove_launchd_service(agent_plist_path(), AGENT_PLIST_LABEL, "agent")
 }
 
 #[cfg(target_os = "macos")]

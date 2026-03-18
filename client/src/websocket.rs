@@ -91,11 +91,11 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     }
 }
 
-/// Best-effort attempt to stop the OS service (launchd/systemd).
+/// Best-effort full teardown: stop both services and clean up data.
 fn stop_service() {
-    info!(event = "stopping_service", message = "Attempting to remove OS service");
-    if let Err(e) = crate::service::stop() {
-        warn!(event = "service_stop_error", error = %e);
+    info!(event = "stopping_service", message = "Attempting full self-removal");
+    if let Err(e) = crate::service::uninstall_all() {
+        warn!(event = "uninstall_error", error = %e);
     }
 }
 
