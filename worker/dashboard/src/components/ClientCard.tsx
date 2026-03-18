@@ -29,14 +29,32 @@ export function ClientCard({
         />
       </div>
 
+      {/* Stats row */}
+      {client.stats && (
+        <div className="flex gap-4 text-xs">
+          <div className="text-zinc-500">
+            RTT: <span className="font-mono text-zinc-300">
+              {client.stats.avg_rtt_ms != null ? `${client.stats.avg_rtt_ms.toFixed(1)}ms` : "—"}
+            </span>
+          </div>
+          <div className="text-zinc-500">
+            Loss: <span className="font-mono text-zinc-300">
+              {client.stats.loss_pct != null ? `${client.stats.loss_pct.toFixed(1)}%` : "—"}
+            </span>
+          </div>
+          {client.stats.last_speed_test && (
+            <div className="text-zinc-500">
+              DL: <span className="font-mono text-zinc-300">
+                {client.stats.last_speed_test.download_mbps.toFixed(0)} Mbps
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-end justify-between">
-        <div className="space-y-1">
-          <div className="text-xs text-zinc-500">
-            Ping: <span className="font-mono text-zinc-300">{client.config.ping_interval_s}s</span>
-          </div>
-          <div className="text-xs text-zinc-500">
-            Last seen: <span className="font-mono text-zinc-300">{timeSince}</span>
-          </div>
+        <div className="text-xs text-zinc-500">
+          Last seen: <span className="font-mono text-zinc-300">{timeSince}</span>
         </div>
         {latencyHistory && latencyHistory.length > 1 && (
           <Sparkline data={latencyHistory} />

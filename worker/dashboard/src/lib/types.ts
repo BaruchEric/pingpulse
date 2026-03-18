@@ -8,6 +8,16 @@ export interface ClientConfig {
   grace_period_s: number;
 }
 
+export interface ClientStats {
+  avg_rtt_ms: number | null;
+  loss_pct: number | null;
+  last_speed_test: {
+    download_mbps: number;
+    upload_mbps: number;
+    timestamp: string;
+  } | null;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -15,6 +25,7 @@ export interface Client {
   config: ClientConfig;
   created_at: string;
   last_seen: string;
+  stats?: ClientStats;
 }
 
 export interface PingResult {
