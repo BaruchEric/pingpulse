@@ -7,18 +7,73 @@ export const clientRoutes = new Hono<AppEnv>();
 clientRoutes.use("*", authGuard);
 
 clientRoutes.get("/", async (c) => {
-  const { results } = await c.env.DB.prepare(
-    "SELECT id, name, location, config_json, created_at, last_seen FROM clients ORDER BY created_at DESC"
-  ).all();
+  const [clientsResult, pingStatsResult, speedTestResult] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      "SELECT id, name, location, config_json, created_at, last_seen FROM clients ORDER BY created_at DESC"
+    ),
+    c.env.DB.prepare(`
+      SELECT
+        client_id,
+        AVG(rtt_ms) as avg_rtt_ms,
+        CAST(SUM(CASE WHEN status != 'ok' THEN 1 ELSE 0 END) AS REAL) * 100.0 / COUNT(*) as loss_pct
+      FROM (
+        SELECT client_id, rtt_ms, status
+        FROM ping_results p1
+        WHERE rowid IN (
+          SELECT rowid FROM ping_results p2
+          WHERE p2.client_id = p1.client_id
+          ORDER BY timestamp DESC
+          LIMIT 10
+        )
+      )
+      GROUP BY client_id
+    `),
+    c.env.DB.prepare(`
+      SELECT st.client_id, st.download_mbps, st.upload_mbps, st.timestamp
+      FROM speed_tests st
+      INNER JOIN (
+        SELECT client_id, MAX(timestamp) as max_ts
+        FROM speed_tests
+        GROUP BY client_id
+      ) latest ON st.client_id = latest.client_id AND st.timestamp = latest.max_ts
+    `),
+  ]);
 
-  const clients = results.map((r: Record<string, unknown>) => ({
-    id: r.id,
-    name: r.name,
-    location: r.location,
-    config: JSON.parse(r.config_json as string),
-    created_at: r.created_at,
-    last_seen: r.last_seen,
-  }));
+  type PingStatRow = { client_id: string; avg_rtt_ms: number | null; loss_pct: number | null };
+  type SpeedTestRow = { client_id: string; download_mbps: number; upload_mbps: number; timestamp: string };
+
+  const pingStatsMap = new Map<string, PingStatRow>(
+    (pingStatsResult.results as PingStatRow[]).map((r) => [r.client_id, r])
+  );
+  const speedTestMap = new Map<string, SpeedTestRow>(
+    (speedTestResult.results as SpeedTestRow[]).map((r) => [r.client_id, r])
+  );
+
+  const clients = (clientsResult.results as Record<string, unknown>[]).map((r) => {
+    const clientId = r.id as string;
+    const pingStat = pingStatsMap.get(clientId);
+    const speedTest = speedTestMap.get(clientId);
+
+    return {
+      id: r.id,
+      name: r.name,
+      location: r.location,
+      config: JSON.parse(r.config_json as string),
+      created_at: r.created_at,
+      last_seen: r.last_seen,
+      stats: {
+        avg_rtt_ms: pingStat?.avg_rtt_ms ?? null,
+        loss_pct: pingStat?.loss_pct ?? null,
+        last_speed_test: speedTest
+          ? {
+              download_mbps: speedTest.download_mbps,
+              upload_mbps: speedTest.upload_mbps,
+              timestamp: speedTest.timestamp,
+            }
+          : null,
+      },
+    };
+  });
 
   return c.json({ clients });
 });

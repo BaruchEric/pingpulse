@@ -1,2 +1,7 @@
 .DS_Store
 .superpowers/
+client/target/
+worker/dashboard/dist/
+worker/dashboard/node_modules/
+node_modules/
+.playwright-cli/

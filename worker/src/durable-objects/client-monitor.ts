@@ -21,7 +21,9 @@ const LOSS_WINDOW_SIZE = 20;
 export class ClientMonitor implements DurableObject {
   private state: DurableObjectState;
   private env: Env;
-  private sessions: WebSocket[] = [];
+  private get sessions(): WebSocket[] {
+    return this.state.getWebSockets();
+  }
   private clientId: string = "";
   private config: ClientConfig = DEFAULT_CLIENT_CONFIG;
   private pingBuffer: PingResult[] = [];
@@ -29,12 +31,18 @@ export class ClientMonitor implements DurableObject {
   private runningJitter: number = 0;
   private pingsInFlight: Map<string, PingInFlight> = new Map();
   private lastFlush: number = Date.now();
+  private lastSeenUpdatedAt: number = 0;
+  private alarmEnsured: boolean = false;
   private disconnectedAt: number | null = null;
   private currentOutageId: string | null = null;
   private lastAlertTimes: Map<string, number> = new Map();
   // Fixed-size ring buffer for packet loss tracking (independent of flush)
   private lossRing: Array<"ok" | "timeout" | "error"> = [];
   private lossRingIndex: number = 0;
+  private configLoaded: boolean = false;
+  // Control panel state
+  private paused: boolean = false;
+  private simulation: { latency_ms: number; loss_pct: number } = { latency_ms: 0, loss_pct: 0 };
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -54,6 +62,22 @@ export class ClientMonitor implements DurableObject {
     // Internal API calls from cron/other workers
     if (url.pathname.endsWith("/trigger-speed-test")) {
       return this.handleSpeedTestTrigger();
+    }
+
+    if (url.pathname.endsWith("/command")) {
+      return this.handleCommand(request);
+    }
+
+    if (url.pathname.endsWith("/status")) {
+      return Response.json({
+        connected: this.sessions.length > 0,
+        session_count: this.sessions.length,
+        paused: this.paused,
+        simulation: this.simulation,
+        pings_in_flight: this.pingsInFlight.size,
+        buffer_size: this.pingBuffer.length,
+        disconnected_at: this.disconnectedAt ? new Date(this.disconnectedAt).toISOString() : null,
+      });
     }
 
     if (request.headers.get("Upgrade") !== "websocket") {
@@ -76,8 +100,7 @@ export class ClientMonitor implements DurableObject {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
-    this.state.acceptWebSocket(server);
-    this.sessions.push(server);
+    this.state.acceptWebSocket(server, [this.clientId]);
 
     // Client connected — clear any disconnection state
     if (this.disconnectedAt) {
@@ -85,22 +108,10 @@ export class ClientMonitor implements DurableObject {
     }
 
     // Update last_seen and load config in parallel (independent DB calls)
-    const [, configRow] = await Promise.all([
-      this.env.DB.prepare(
-        "UPDATE clients SET last_seen = ? WHERE id = ?"
-      )
-        .bind(new Date().toISOString(), this.clientId)
-        .run(),
-      this.env.DB.prepare(
-        "SELECT config_json FROM clients WHERE id = ?"
-      )
-        .bind(this.clientId)
-        .first<{ config_json: string }>(),
+    await Promise.all([
+      this.updateLastSeen(),
+      this.ensureConfigLoaded(),
     ]);
-
-    if (configRow) {
-      this.config = { ...DEFAULT_CLIENT_CONFIG, ...JSON.parse(configRow.config_json) };
-    }
 
     // Start ping alarm if not already running
     const currentAlarm = await this.state.storage.getAlarm();
@@ -127,6 +138,31 @@ export class ClientMonitor implements DurableObject {
   ): Promise<void> {
     if (typeof message !== "string") return;
 
+    // Rehydrate state after hibernation/restart if needed
+    if (!this.clientId) {
+      this.clientId = this.state.id.name ?? "";
+    }
+    if (!this.clientId) {
+      try {
+        const tags = this.state.getTags(ws);
+        if (tags.length > 0) this.clientId = tags[0];
+      } catch {
+        // getTags may not be available in all runtimes
+      }
+    }
+    await this.ensureConfigLoaded();
+
+    // Ensure alarm running after hibernation (once per rehydration)
+    if (!this.alarmEnsured && this.clientId) {
+      const currentAlarm = await this.state.storage.getAlarm();
+      if (!currentAlarm && !this.paused) {
+        await this.state.storage.setAlarm(
+          Date.now() + this.config.ping_interval_s * 1000
+        );
+      }
+      this.alarmEnsured = true;
+    }
+
     try {
       const msg: WSMessage = JSON.parse(message);
 
@@ -134,23 +170,37 @@ export class ClientMonitor implements DurableObject {
         case "pong":
           await this.handlePong(msg);
           break;
-        case "ping":
-          // Client-to-CF ping — echo back immediately
+        case "ping": {
+          // Client-to-CF ping — echo back and record the round trip
+          const now = Date.now();
+          const clientRtt = now - msg.ts;
           ws.send(
             JSON.stringify({
               type: "pong",
               id: msg.id,
               ts: msg.ts,
-              client_ts: Date.now(),
+              client_ts: now,
             } satisfies WSMessage)
           );
+          this.pingBuffer.push({
+            client_id: this.clientId,
+            timestamp: new Date().toISOString(),
+            rtt_ms: clientRtt,
+            jitter_ms: 0,
+            direction: "client_to_cf",
+            status: "ok",
+          });
+          this.recordLoss("ok");
           break;
+        }
         case "speed_test_result":
           await this.handleSpeedTestResult(msg.result);
           break;
       }
-    } catch {
-      // Ignore malformed messages
+
+      await Promise.all([this.maybeFlushBuffer(), this.updateLastSeen()]);
+    } catch (e) {
+      console.error(`webSocketMessage error clientId=[${this.clientId}] stateIdName=[${this.state.id.name}] buf=${this.pingBuffer.length}:`, e);
     }
   }
 
@@ -197,16 +247,34 @@ export class ClientMonitor implements DurableObject {
     this.resolveTimedOutPings();
 
     if (this.sessions.length > 0) {
-      await this.sendPing();
-      await this.maybeFlushBuffer();
+      if (!this.paused) {
+        // Simulate packet loss: randomly skip pings
+        const shouldDrop = this.simulation.loss_pct > 0
+          && Math.random() * 100 < this.simulation.loss_pct;
+
+        if (shouldDrop) {
+          // Record as a timeout (simulated loss)
+          this.pingBuffer.push({
+            client_id: this.clientId,
+            timestamp: new Date().toISOString(),
+            rtt_ms: 0,
+            jitter_ms: 0,
+            direction: "cf_to_client",
+            status: "timeout",
+          });
+          this.recordLoss("timeout");
+        } else {
+          await this.sendPing();
+        }
+      }
+      await Promise.all([this.maybeFlushBuffer(), this.updateLastSeen()]);
       await this.state.storage.setAlarm(
         Date.now() + this.config.ping_interval_s * 1000
       );
     }
   }
 
-  private async handleSessionDrop(ws: WebSocket): Promise<void> {
-    this.sessions = this.sessions.filter((s) => s !== ws);
+  private async handleSessionDrop(_ws: WebSocket): Promise<void> {
     if (this.sessions.length === 0) {
       this.disconnectedAt = Date.now();
       await this.state.storage.setAlarm(
@@ -261,20 +329,36 @@ export class ClientMonitor implements DurableObject {
     return row?.secret_hash === hash;
   }
 
+  private broadcast(msg: WSMessage): void {
+    const data = JSON.stringify(msg);
+    for (const ws of this.sessions) {
+      try {
+        ws.send(data);
+      } catch {
+        // WebSocket may be closing
+      }
+    }
+  }
+
+  private async ensureConfigLoaded(): Promise<void> {
+    if (this.configLoaded || !this.clientId) return;
+    const configRow = await this.env.DB.prepare(
+      "SELECT config_json FROM clients WHERE id = ?"
+    )
+      .bind(this.clientId)
+      .first<{ config_json: string }>();
+    if (configRow) {
+      this.config = { ...DEFAULT_CLIENT_CONFIG, ...JSON.parse(configRow.config_json) };
+    }
+    this.configLoaded = true; // Set even if no row — prevent repeat queries
+  }
+
   private async sendPing(): Promise<void> {
     const pingId = crypto.randomUUID();
     const now = Date.now();
 
     this.pingsInFlight.set(pingId, { id: pingId, sent_ts: now });
-
-    const msg: WSMessage = { type: "ping", id: pingId, ts: now };
-    for (const ws of this.sessions) {
-      try {
-        ws.send(JSON.stringify(msg));
-      } catch {
-        // WebSocket may be closing
-      }
-    }
+    this.broadcast({ type: "ping", id: pingId, ts: now });
   }
 
   private async handlePong(
@@ -284,7 +368,7 @@ export class ClientMonitor implements DurableObject {
     if (!inFlight) return;
 
     this.pingsInFlight.delete(msg.id);
-    const rtt = Date.now() - inFlight.sent_ts;
+    const rtt = Date.now() - inFlight.sent_ts + this.simulation.latency_ms;
 
     // RFC 3550 jitter: J(i) = J(i-1) + (|D(i-1,i)| - J(i-1)) / 16
     if (this.recentRTTs.length > 0) {
@@ -335,7 +419,7 @@ export class ClientMonitor implements DurableObject {
   private async maybeFlushBuffer(): Promise<void> {
     const now = Date.now();
     const shouldFlush =
-      this.pingBuffer.length >= 10 || now - this.lastFlush >= 60_000;
+      this.pingBuffer.length >= 5 || now - this.lastFlush >= 30_000;
 
     if (!shouldFlush || this.pingBuffer.length === 0) return;
 
@@ -376,6 +460,15 @@ export class ClientMonitor implements DurableObject {
     }
   }
 
+  private async updateLastSeen(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastSeenUpdatedAt < 30_000) return;
+    this.lastSeenUpdatedAt = now;
+    await this.env.DB.prepare("UPDATE clients SET last_seen = ? WHERE id = ?")
+      .bind(new Date(now).toISOString(), this.clientId)
+      .run();
+  }
+
   private async handleReconnect(): Promise<void> {
     if (this.currentOutageId) {
       const now = new Date();
@@ -398,13 +491,15 @@ export class ClientMonitor implements DurableObject {
   private async handleSpeedTestResult(
     result: SpeedTestResult
   ): Promise<void> {
+    // Always use server UTC timestamp for consistent time-range queries
+    const timestamp = new Date().toISOString();
     await this.env.DB.prepare(
       "INSERT INTO speed_tests (id, client_id, timestamp, type, download_mbps, upload_mbps, payload_bytes, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )
       .bind(
         crypto.randomUUID(),
         result.client_id,
-        result.timestamp,
+        timestamp,
         result.type,
         result.download_mbps,
         result.upload_mbps,
@@ -423,19 +518,84 @@ export class ClientMonitor implements DurableObject {
     });
   }
 
-  private handleSpeedTestTrigger(): Response {
-    for (const ws of this.sessions) {
-      try {
-        ws.send(
-          JSON.stringify({
-            type: "start_speed_test",
-            test_type: "full",
-          } satisfies WSMessage)
+  private async handleCommand(request: Request): Promise<Response> {
+    const { command, params } = await request.json<{
+      command: string;
+      params?: Record<string, unknown>;
+    }>();
+
+    switch (command) {
+      case "pause":
+        this.paused = true;
+        return Response.json({ ok: true, state: "paused" });
+
+      case "resume":
+        this.paused = false;
+        // Restart ping alarm
+        await this.state.storage.setAlarm(
+          Date.now() + this.config.ping_interval_s * 1000
         );
-      } catch {
-        // ignore
+        return Response.json({ ok: true, state: "running" });
+
+      case "speed_test": {
+        const testType = params?.test_type === "probe" ? "probe" as const : "full" as const;
+        this.broadcast({ type: "start_speed_test", test_type: testType });
+        return Response.json({ ok: true, test_type: testType });
       }
+
+      case "simulate": {
+        this.simulation = {
+          latency_ms: (params?.latency_ms as number) ?? this.simulation.latency_ms,
+          loss_pct: (params?.loss_pct as number) ?? this.simulation.loss_pct,
+        };
+        return Response.json({ ok: true, simulation: this.simulation });
+      }
+
+      case "simulate_reset":
+        this.simulation = { latency_ms: 0, loss_pct: 0 };
+        return Response.json({ ok: true, simulation: this.simulation });
+
+      case "disconnect": {
+        // Force-close all WebSocket sessions
+        for (const ws of this.sessions) {
+          try { ws.close(1000, "Admin disconnect"); } catch { /* ignore */ }
+        }
+        return Response.json({ ok: true, message: "Client disconnected" });
+      }
+
+      case "update_config": {
+        if (!params) return Response.json({ error: "No config provided" }, { status: 400 });
+
+        // Only pick known config keys to prevent arbitrary data injection
+        const allowed: (keyof ClientConfig)[] = [
+          "ping_interval_s", "probe_size_bytes", "full_test_schedule",
+          "full_test_payload_bytes", "alert_latency_threshold_ms",
+          "alert_loss_threshold_pct", "grace_period_s",
+        ];
+        const configUpdates: Partial<ClientConfig> = {};
+        for (const key of allowed) {
+          if (key in params) (configUpdates as Record<string, unknown>)[key] = params[key];
+        }
+
+        const merged = { ...this.config, ...configUpdates };
+        await this.env.DB.prepare(
+          "UPDATE clients SET config_json = ? WHERE id = ?"
+        )
+          .bind(JSON.stringify(merged), this.clientId)
+          .run();
+
+        this.config = merged;
+        this.broadcast({ type: "config_update", config: this.config });
+        return Response.json({ ok: true, config: this.config });
+      }
+
+      default:
+        return Response.json({ error: `Unknown command: ${command}` }, { status: 400 });
     }
+  }
+
+  private handleSpeedTestTrigger(): Response {
+    this.broadcast({ type: "start_speed_test", test_type: "full" });
     return new Response("OK");
   }
 

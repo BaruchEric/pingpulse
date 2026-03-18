@@ -7,6 +7,7 @@ import { metricsRoutes } from "@/api/metrics";
 import { alertRoutes } from "@/api/alerts";
 import { speedtestRoutes } from "@/api/speedtest";
 import { exportRoutes } from "@/api/export";
+import { commandRoutes } from "@/api/command";
 
 export function createRouter() {
   const app = new Hono<AppEnv>();
@@ -30,6 +31,7 @@ export function createRouter() {
   // Also mount at /speedtest for client-facing payload endpoints (no /api prefix)
   app.route("/speedtest", speedtestRoutes);
   app.route("/api/export", exportRoutes);
+  app.route("/api/command", commandRoutes);
 
   return app;
 }

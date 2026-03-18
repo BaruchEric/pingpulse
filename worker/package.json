@@ -11,7 +11,9 @@
   },
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev:dashboard": "cd dashboard && bun run dev",
+    "build": "cd dashboard && bun run build && cd .. && wrangler deploy --dry-run",
+    "deploy": "cd dashboard && bun run build && cd .. && wrangler deploy",
     "test": "vitest run"
   },
   "dependencies": {
