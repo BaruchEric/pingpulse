@@ -1,3 +1,7 @@
+#![deny(warnings, clippy::all)]
+#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+
 mod config;
 mod logger;
 mod messages;

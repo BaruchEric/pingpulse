@@ -86,7 +86,7 @@ describe("ClientMonitor DO", () => {
     ws.accept();
 
     const message = await new Promise<string>((resolve) => {
-      ws.addEventListener("message", (event) => {
+      ws.addEventListener("message", (event: MessageEvent) => {
         resolve(event.data as string);
       });
     });
