@@ -229,12 +229,9 @@ async fn service_uninstall(State(state): State<Arc<AppState>>) -> Json<ActionRes
         }
     }
 
-    // Schedule delayed self-cleanup
+    // Schedule delayed self-cleanup (the agent runs inside the daemon process now)
     tokio::spawn(async {
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-        if let Err(e) = service::stop_agent() {
-            eprintln!("Warning: failed to remove agent service: {e}");
-        }
         if let Err(e) = service::cleanup_data() {
             eprintln!("Warning: failed to clean up data: {e}");
         }

@@ -46,14 +46,11 @@ enum Commands {
     Stop,
     /// Check the daemon status
     Status,
-    /// Run the local management API server
+    /// Run the local management API server (standalone, for development)
     Agent {
         /// Port for the local management API
         #[arg(long, default_value = "9111")]
         port: u16,
-        /// Install as a system service instead of running in foreground
-        #[arg(long)]
-        install: bool,
     },
 }
 
@@ -95,17 +92,8 @@ async fn main() {
                 }
             }
         }
-        Commands::Agent { port, install } => {
-            if install {
-                let binary = std::env::current_exe()
-                    .expect("Cannot determine binary path")
-                    .to_string_lossy()
-                    .to_string();
-                if let Err(e) = service::install_agent(&binary) {
-                    eprintln!("Agent service install failed: {e}");
-                    std::process::exit(1);
-                }
-            } else if let Err(e) = agent::run(port).await {
+        Commands::Agent { port } => {
+            if let Err(e) = agent::run(port).await {
                 eprintln!("Agent error: {e}");
                 std::process::exit(1);
             }
@@ -172,7 +160,17 @@ async fn cmd_start_foreground() -> anyhow::Result<()> {
 
     tracing::info!(event = "daemon_starting", client_id = %config.server.client_id);
 
-    websocket::run(config).await
+    // Spawn the local management agent alongside the daemon
+    let agent_handle = tokio::spawn(async {
+        if let Err(e) = agent::run(9111).await {
+            tracing::error!(event = "agent_failed", error = %e);
+        }
+    });
+
+    let ws_result = websocket::run(config).await;
+
+    agent_handle.abort();
+    ws_result
 }
 
 fn cmd_start_service() -> anyhow::Result<()> {
