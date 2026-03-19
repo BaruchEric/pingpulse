@@ -84,11 +84,12 @@ impl<'a> Write for DailyFileWriteGuard<'a> {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        let state = self.writer.state.lock().unwrap();
-        if let Some(ref _file) = state.file {
-            drop(state);
+        let mut state = self.writer.state.lock().unwrap();
+        if let Some(ref mut file) = state.file {
+            file.flush()
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 

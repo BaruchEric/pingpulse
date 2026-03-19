@@ -1,74 +1,19 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:test";
-import { createRouter } from "@/api/router";
-import { hashString } from "@/utils/hash";
-
-const app = createRouter();
-let adminCookie: string;
-
-async function setup() {
-  await env.DB.exec(
-    "DELETE FROM admin; DELETE FROM registration_tokens; DELETE FROM clients; DELETE FROM ping_results; DELETE FROM speed_tests; DELETE FROM alerts; DELETE FROM rate_limits"
-  );
-
-  const hash = await hashString("testpass123");
-  await env.DB.prepare(
-    "INSERT INTO admin (id, password_hash, created_at) VALUES (1, ?, ?)"
-  )
-    .bind(hash, new Date().toISOString())
-    .run();
-
-  const res = await app.request(
-    "/api/auth/login",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "testpass123" }),
-    },
-    env
-  );
-  const { token } = await res.json<{ token: string }>();
-  adminCookie = `session=${token}`;
-}
-
-/** Helper: admin generates a registration token */
-async function generateToken(): Promise<string> {
-  const res = await app.request(
-    "/api/auth/register/token",
-    {
-      method: "POST",
-      headers: { Cookie: adminCookie },
-    },
-    env
-  );
-  expect(res.status).toBe(200);
-  const data = await res.json<{ token: string }>();
-  return data.token;
-}
-
-/** Helper: exchange token for client credentials */
-async function registerClient(
-  token: string,
-  name: string,
-  location: string
-): Promise<{ client_id: string; client_secret: string; ws_url: string }> {
-  const res = await app.request(
-    "/api/auth/register",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, name, location }),
-    },
-    env
-  );
-  expect(res.status).toBe(200);
-  return res.json();
-}
+import {
+  app,
+  setup,
+  getAdminCookie,
+  generateToken,
+  registerClient,
+} from "./helpers";
 
 describe("Client lifecycle: register → verify → delete → gone", () => {
   beforeEach(setup);
 
   it("full lifecycle", async () => {
+    const adminCookie = getAdminCookie();
+
     // 1. Register a client
     const token = await generateToken();
     const { client_id, client_secret, ws_url } = await registerClient(
@@ -152,6 +97,7 @@ describe("Client lifecycle: register → verify → delete → gone", () => {
   });
 
   it("delete cascades ping and speed test data", async () => {
+    const adminCookie = getAdminCookie();
     const token = await generateToken();
     const { client_id } = await registerClient(token, "Test", "Lab");
 
@@ -197,6 +143,7 @@ describe("Client lifecycle: register → verify → delete → gone", () => {
   });
 
   it("delete nonexistent client returns 404", async () => {
+    const adminCookie = getAdminCookie();
     const res = await app.request(
       "/api/clients/nonexistent-id",
       {
@@ -209,6 +156,7 @@ describe("Client lifecycle: register → verify → delete → gone", () => {
   });
 
   it("multiple clients are independent", async () => {
+    const adminCookie = getAdminCookie();
     const token1 = await generateToken();
     const token2 = await generateToken();
     const c1 = await registerClient(token1, "Office", "Montreal");

@@ -151,7 +151,7 @@ async fn get_config(State(state): State<Arc<AppState>>) -> Json<SanitizedConfig>
 async fn get_logs() -> Json<LogsResponse> {
     let logs_dir = Config::logs_dir();
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let log_file = logs_dir.join(format!("{today}.jsonl"));
+    let log_file = logs_dir.join(format!("pingpulse-{today}.log"));
     let file_name = log_file.display().to_string();
 
     let log_file_clone = log_file.clone();
@@ -205,10 +205,6 @@ fn read_tail_lines(path: &std::path::Path, n: usize) -> Vec<String> {
         lines.drain(..lines.len() - n);
     }
     lines
-}
-
-async fn service_remove() -> Json<ActionResponse> {
-    daemon_stop().await
 }
 
 async fn service_uninstall(State(state): State<Arc<AppState>>) -> Json<ActionResponse> {
@@ -291,7 +287,6 @@ pub async fn run(port: u16, config: Option<Config>) -> Result<()> {
         .route("/daemon/restart", post(daemon_restart))
         .route("/logs", get(get_logs))
         .route("/config", get(get_config))
-        .route("/service/remove", post(service_remove))
         .route("/service/uninstall", post(service_uninstall))
         .layer(cors)
         .with_state(state);
