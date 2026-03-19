@@ -195,11 +195,7 @@ fn read_tail_lines(path: &std::path::Path, n: usize) -> Vec<String> {
 }
 
 async fn service_remove() -> Json<ActionResponse> {
-    match tokio::task::spawn_blocking(service::stop).await {
-        Ok(Ok(())) => Json(ActionResponse::success()),
-        Ok(Err(e)) => Json(ActionResponse::error(format!("Failed to remove daemon service: {e}"))),
-        Err(e) => Json(ActionResponse::error(format!("Internal error: {e}"))),
-    }
+    daemon_stop().await
 }
 
 async fn service_uninstall(State(state): State<Arc<AppState>>) -> Json<ActionResponse> {
@@ -254,8 +250,11 @@ fn build_cors(server_url: &str) -> CorsLayer {
         .allow_headers(tower_http::cors::Any)
 }
 
-pub async fn run(port: u16) -> Result<()> {
-    let config = Config::load().await?;
+pub async fn run(port: u16, config: Option<Config>) -> Result<()> {
+    let config = match config {
+        Some(c) => c,
+        None => Config::load().await?,
+    };
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let cors = build_cors(&config.server.base_url);
 

@@ -197,7 +197,7 @@ export class ClientMonitor implements DurableObject {
           break;
       }
 
-      await Promise.all([this.maybeFlushBuffer(), this.updateLastSeen()]);
+      await Promise.all([this.flushBuffer(), this.updateLastSeen()]);
     } catch (e) {
       console.error(`webSocketMessage error clientId=[${this.clientId}] stateIdName=[${this.state.id.name}] buf=${this.pingBuffer.length}:`, e);
     }
@@ -266,7 +266,7 @@ export class ClientMonitor implements DurableObject {
           await this.sendPing();
         }
       }
-      await Promise.all([this.maybeFlushBuffer(), this.updateLastSeen()]);
+      await Promise.all([this.flushBuffer(), this.updateLastSeen()]);
       await this.state.storage.setAlarm(
         Date.now() + this.config.ping_interval_s * 1000
       );
@@ -421,7 +421,7 @@ export class ClientMonitor implements DurableObject {
     }
   }
 
-  private async maybeFlushBuffer(): Promise<void> {
+  private async flushBuffer(): Promise<void> {
     // Flush immediately — the Hibernatable WebSockets API resets in-memory
     // state on each wake, so buffering across cycles loses data.
     if (this.pingBuffer.length === 0) return;

@@ -23,9 +23,9 @@ pub fn install_and_start(#[cfg_attr(target_os = "windows", allow(unused))] binar
 
 /// Self-removal for when the daemon wants to uninstall itself.
 ///
-/// Unlike `uninstall_all()`, this does NOT call `launchctl remove` which
-/// would send SIGTERM to our own process. Instead it just deletes the plist
-/// files and cleans up data. The caller should then exit with code 0.
+/// This does NOT call `launchctl remove` which would send SIGTERM to our
+/// own process. Instead it just deletes the plist files and cleans up data.
+/// The caller should then exit with code 0.
 /// With `SuccessfulExit=false`, launchd won't restart. Even with older
 /// plists that have `KeepAlive=true`, the missing config file will cause
 /// an immediate crash on restart, and launchd's built-in throttle will
@@ -116,14 +116,14 @@ const LEGACY_AGENT_PLIST_LABEL: &str = "ca.beric.pingpulse.agent";
 fn plist_path() -> PathBuf {
     dirs::home_dir()
         .expect("No home directory")
-        .join("Library/LaunchAgents/ca.beric.pingpulse.plist")
+        .join(format!("Library/LaunchAgents/{PLIST_LABEL}.plist"))
 }
 
 #[cfg(target_os = "macos")]
 fn legacy_agent_plist_path() -> PathBuf {
     dirs::home_dir()
         .expect("No home directory")
-        .join("Library/LaunchAgents/ca.beric.pingpulse.agent.plist")
+        .join(format!("Library/LaunchAgents/{LEGACY_AGENT_PLIST_LABEL}.plist"))
 }
 
 #[cfg(target_os = "macos")]
@@ -206,12 +206,9 @@ fn remove_launchd_service(path: PathBuf, label: &str, description: &str) -> Resu
 #[cfg(target_os = "macos")]
 fn stop_launchd() -> Result<()> {
     // Clean up legacy agent plist if it exists (agent now runs inside daemon)
-    if legacy_agent_plist_path().exists() {
-        let _ = remove_launchd_service(
-            legacy_agent_plist_path(),
-            LEGACY_AGENT_PLIST_LABEL,
-            "legacy agent",
-        );
+    let legacy = legacy_agent_plist_path();
+    if legacy.exists() {
+        let _ = remove_launchd_service(legacy, LEGACY_AGENT_PLIST_LABEL, "legacy agent");
     }
     remove_launchd_service(plist_path(), PLIST_LABEL, "service")
 }
@@ -225,7 +222,6 @@ fn status_launchd() -> Result<bool> {
 
     Ok(output.status.success())
 }
-
 
 // --- Linux (systemd) ---
 

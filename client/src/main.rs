@@ -93,7 +93,7 @@ async fn main() {
             }
         }
         Commands::Agent { port } => {
-            if let Err(e) = agent::run(port).await {
+            if let Err(e) = agent::run(port, None).await {
                 eprintln!("Agent error: {e}");
                 std::process::exit(1);
             }
@@ -161,8 +161,9 @@ async fn cmd_start_foreground() -> anyhow::Result<()> {
     tracing::info!(event = "daemon_starting", client_id = %config.server.client_id);
 
     // Spawn the local management agent alongside the daemon
-    let agent_handle = tokio::spawn(async {
-        if let Err(e) = agent::run(9111).await {
+    let agent_config = config.clone();
+    let agent_handle = tokio::spawn(async move {
+        if let Err(e) = agent::run(9111, Some(agent_config)).await {
             tracing::error!(event = "agent_failed", error = %e);
         }
     });
