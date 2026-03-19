@@ -91,11 +91,12 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     }
 }
 
-/// Best-effort full teardown: stop both services and clean up data.
+/// Best-effort self-removal: delete plists and clean up data without
+/// sending SIGTERM to ourselves via `launchctl remove`.
 fn stop_service() {
-    info!(event = "stopping_service", message = "Attempting full self-removal");
-    if let Err(e) = crate::service::uninstall_all() {
-        warn!(event = "uninstall_error", error = %e);
+    info!(event = "stopping_service", message = "Self-removing daemon");
+    if let Err(e) = crate::service::self_remove() {
+        warn!(event = "self_remove_error", error = %e);
     }
 }
 

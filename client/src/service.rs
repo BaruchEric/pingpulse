@@ -21,9 +21,33 @@ pub fn install_and_start(#[cfg_attr(target_os = "windows", allow(unused))] binar
     }
 }
 
-/// Full teardown: stop service, clean up data, and clear Login Items.
-pub fn uninstall_all() -> Result<()> {
-    let _ = stop(); // ignore error if already stopped
+/// Self-removal for when the daemon wants to uninstall itself.
+///
+/// Unlike `uninstall_all()`, this does NOT call `launchctl remove` which
+/// would send SIGTERM to our own process. Instead it just deletes the plist
+/// files and cleans up data. The caller should then exit with code 0.
+/// With `SuccessfulExit=false`, launchd won't restart. Even with older
+/// plists that have `KeepAlive=true`, the missing config file will cause
+/// an immediate crash on restart, and launchd's built-in throttle will
+/// eventually give up.
+pub fn self_remove() -> Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        // Delete plist files (don't call launchctl remove — that's us)
+        let _ = std::fs::remove_file(plist_path());
+        let _ = std::fs::remove_file(legacy_agent_plist_path());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Disable without stopping (we ARE the running process)
+        let _ = std::process::Command::new("systemctl")
+            .args(["--user", "disable", "pingpulse"])
+            .output();
+        let _ = std::fs::remove_file(service_path());
+        let _ = std::process::Command::new("systemctl")
+            .args(["--user", "daemon-reload"])
+            .output();
+    }
     cleanup_data()?;
     reset_btm();
     Ok(())

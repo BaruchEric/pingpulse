@@ -205,10 +205,7 @@ async fn service_remove() -> Json<ActionResponse> {
 async fn service_uninstall(State(state): State<Arc<AppState>>) -> Json<ActionResponse> {
     let mut warnings = Vec::new();
 
-    // Stop daemon
-    let _ = tokio::task::spawn_blocking(service::stop).await;
-
-    // Try to delete server record
+    // Try to delete server record first (needs config which self_remove deletes)
     let client = reqwest::Client::new();
     let url = format!(
         "{}/api/clients/{}/self",
@@ -229,11 +226,11 @@ async fn service_uninstall(State(state): State<Arc<AppState>>) -> Json<ActionRes
         }
     }
 
-    // Schedule delayed self-cleanup (the agent runs inside the daemon process now)
+    // Schedule delayed self-removal and exit
     tokio::spawn(async {
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-        if let Err(e) = service::cleanup_data() {
-            eprintln!("Warning: failed to clean up data: {e}");
+        if let Err(e) = service::self_remove() {
+            eprintln!("Warning: self-remove failed: {e}");
         }
         std::process::exit(0);
     });
