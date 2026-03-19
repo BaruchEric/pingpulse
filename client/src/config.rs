@@ -88,15 +88,29 @@ impl Config {
         client_secret: String,
     ) -> Self {
         Self {
-            server: ServerConfig { base_url, ws_url, client_id, client_secret },
-            ping: PingConfig { interval_s: 30, grace_period_s: 60 },
+            server: ServerConfig {
+                base_url,
+                ws_url,
+                client_id,
+                client_secret,
+            },
+            ping: PingConfig {
+                interval_s: 30,
+                grace_period_s: 60,
+            },
             speed_test: SpeedTestConfig {
                 probe_size_bytes: 262144,
                 full_test_payload_bytes: 10_485_760,
                 full_test_schedule: "0 */6 * * *".into(),
             },
-            alerts: AlertConfig { latency_threshold_ms: 100.0, loss_threshold_pct: 5.0 },
-            logging: LoggingConfig { level: "info".into(), retention_days: 30 },
+            alerts: AlertConfig {
+                latency_threshold_ms: 100.0,
+                loss_threshold_pct: 5.0,
+            },
+            logging: LoggingConfig {
+                level: "info".into(),
+                retention_days: 30,
+            },
         }
     }
 
@@ -130,14 +144,23 @@ mod tests {
                 client_id: "abc123".into(),
                 client_secret: "secret".into(),
             },
-            ping: PingConfig { interval_s: 30, grace_period_s: 60 },
+            ping: PingConfig {
+                interval_s: 30,
+                grace_period_s: 60,
+            },
             speed_test: SpeedTestConfig {
                 probe_size_bytes: 262144,
                 full_test_payload_bytes: 10485760,
                 full_test_schedule: "0 */6 * * *".into(),
             },
-            alerts: AlertConfig { latency_threshold_ms: 100.0, loss_threshold_pct: 5.0 },
-            logging: LoggingConfig { level: "info".into(), retention_days: 30 },
+            alerts: AlertConfig {
+                latency_threshold_ms: 100.0,
+                loss_threshold_pct: 5.0,
+            },
+            logging: LoggingConfig {
+                level: "info".into(),
+                retention_days: 30,
+            },
         };
 
         let serialized = toml::to_string_pretty(&config).unwrap();
@@ -173,14 +196,23 @@ mod tests {
                 client_id: "abc".into(),
                 client_secret: "sec".into(),
             },
-            ping: PingConfig { interval_s: 30, grace_period_s: 60 },
+            ping: PingConfig {
+                interval_s: 30,
+                grace_period_s: 60,
+            },
             speed_test: SpeedTestConfig {
                 probe_size_bytes: 262144,
                 full_test_payload_bytes: 10485760,
                 full_test_schedule: "0 */6 * * *".into(),
             },
-            alerts: AlertConfig { latency_threshold_ms: 100.0, loss_threshold_pct: 5.0 },
-            logging: LoggingConfig { level: "info".into(), retention_days: 30 },
+            alerts: AlertConfig {
+                latency_threshold_ms: 100.0,
+                loss_threshold_pct: 5.0,
+            },
+            logging: LoggingConfig {
+                level: "info".into(),
+                retention_days: 30,
+            },
         };
 
         let remote = RemoteConfig {

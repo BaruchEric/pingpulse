@@ -56,21 +56,10 @@ pub enum IncomingMessage {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutgoingMessage {
-    Pong {
-        id: String,
-        ts: u64,
-        client_ts: u64,
-    },
-    Ping {
-        id: String,
-        ts: u64,
-    },
-    SpeedTestResult {
-        result: SpeedTestResult,
-    },
-    Error {
-        message: String,
-    },
+    Pong { id: String, ts: u64, client_ts: u64 },
+    Ping { id: String, ts: u64 },
+    SpeedTestResult { result: SpeedTestResult },
+    Error { message: String },
 }
 
 #[cfg(test)]

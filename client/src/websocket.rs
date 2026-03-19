@@ -4,16 +4,14 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tokio::time::{self};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 use crate::config::Config;
 use crate::messages::{IncomingMessage, OutgoingMessage, SpeedTestType};
 use crate::speed_test;
 
 type WsSink = futures_util::stream::SplitSink<
-    tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-    >,
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
     Message,
 >;
 
@@ -41,7 +39,10 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                 return Ok(());
             }
             Ok(Shutdown::Deregistered) => {
-                warn!(event = "deregistered", message = "Client has been deleted from the server, stopping");
+                warn!(
+                    event = "deregistered",
+                    message = "Client has been deleted from the server, stopping"
+                );
                 stop_service();
                 return Ok(());
             }
@@ -70,7 +71,8 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                     if consecutive_auth_failures >= MAX_AUTH_FAILURES {
                         warn!(
                             event = "deregistered_inferred",
-                            message = "Too many consecutive auth failures, assuming client was deleted"
+                            message =
+                                "Too many consecutive auth failures, assuming client was deleted"
                         );
                         stop_service();
                         return Ok(());
@@ -124,12 +126,18 @@ async fn connect_and_run(
     // Build request with auth header
     let request = http::Request::builder()
         .uri(&ws_url)
-        .header("Authorization", format!("Bearer {}", config.server.client_secret))
+        .header(
+            "Authorization",
+            format!("Bearer {}", config.server.client_secret),
+        )
         .header("Host", url::Url::parse(base)?.host_str().unwrap_or(""))
         .header("Connection", "Upgrade")
         .header("Upgrade", "websocket")
         .header("Sec-WebSocket-Version", "13")
-        .header("Sec-WebSocket-Key", tokio_tungstenite::tungstenite::handshake::client::generate_key())
+        .header(
+            "Sec-WebSocket-Key",
+            tokio_tungstenite::tungstenite::handshake::client::generate_key(),
+        )
         .body(())?;
 
     let (ws_stream, _) = connect_async(request).await?;
@@ -221,7 +229,11 @@ async fn handle_message(
 ) -> Option<Shutdown> {
     match msg {
         IncomingMessage::Ping { id, ts, .. } => {
-            let pong = OutgoingMessage::Pong { id: id.clone(), ts, client_ts: now_ms() };
+            let pong = OutgoingMessage::Pong {
+                id: id.clone(),
+                ts,
+                client_ts: now_ms(),
+            };
             let json = serde_json::to_string(&pong).unwrap();
             if let Err(e) = sink.send(Message::Text(json.into())).await {
                 error!(event = "pong_send_error", error = %e);
@@ -229,7 +241,11 @@ async fn handle_message(
             info!(event = "ping_reply", ping_id = %id);
         }
 
-        IncomingMessage::Pong { id, ts, client_ts: _ } => {
+        IncomingMessage::Pong {
+            id,
+            ts,
+            client_ts: _,
+        } => {
             let rtt_ms = now_ms().saturating_sub(ts);
             info!(event = "pong_received", ping_id = %id, rtt_ms = rtt_ms);
         }
@@ -315,7 +331,9 @@ impl Backoff {
     const MAX_MS: u64 = 60_000;
 
     fn new() -> Self {
-        Self { current_ms: Self::INITIAL_MS }
+        Self {
+            current_ms: Self::INITIAL_MS,
+        }
     }
 
     fn reset(&mut self) {

@@ -38,11 +38,19 @@ struct ActionResponse {
 
 impl ActionResponse {
     fn success() -> Self {
-        Self { ok: true, error: None, warnings: None }
+        Self {
+            ok: true,
+            error: None,
+            warnings: None,
+        }
     }
 
     fn error(msg: impl Into<String>) -> Self {
-        Self { ok: false, error: Some(msg.into()), warnings: None }
+        Self {
+            ok: false,
+            error: Some(msg.into()),
+            warnings: None,
+        }
     }
 
     fn with_warnings(mut self, warnings: Vec<String>) -> Self {
@@ -115,7 +123,9 @@ async fn daemon_start() -> Json<ActionResponse> {
     };
     match tokio::task::spawn_blocking(move || service::install_and_start(&binary)).await {
         Ok(Ok(())) => Json(ActionResponse::success()),
-        Ok(Err(e)) => Json(ActionResponse::error(format!("Failed to start daemon: {e}"))),
+        Ok(Err(e)) => Json(ActionResponse::error(format!(
+            "Failed to start daemon: {e}"
+        ))),
         Err(e) => Json(ActionResponse::error(format!("Internal error: {e}"))),
     }
 }
@@ -149,7 +159,10 @@ async fn get_logs() -> Json<LogsResponse> {
         .await
         .unwrap_or_default();
 
-    Json(LogsResponse { lines, file: file_name })
+    Json(LogsResponse {
+        lines,
+        file: file_name,
+    })
 }
 
 /// Read the last `n` lines from a file efficiently by reading backward from EOF.
@@ -209,16 +222,24 @@ async fn service_uninstall(State(state): State<Arc<AppState>>) -> Json<ActionRes
     );
     match client
         .delete(&url)
-        .header("Authorization", format!("Bearer {}", state.config.server.client_secret))
+        .header(
+            "Authorization",
+            format!("Bearer {}", state.config.server.client_secret),
+        )
         .send()
         .await
     {
         Ok(resp) if resp.status().is_success() => {}
         Ok(resp) => {
-            warnings.push(format!("Server record not deleted — server returned {}", resp.status()));
+            warnings.push(format!(
+                "Server record not deleted — server returned {}",
+                resp.status()
+            ));
         }
         Err(e) => {
-            warnings.push(format!("Server record not deleted — server unreachable: {e}"));
+            warnings.push(format!(
+                "Server record not deleted — server unreachable: {e}"
+            ));
         }
     }
 
@@ -337,14 +358,23 @@ mod tests {
                 client_id: "abc123".into(),
                 client_secret: "super-secret-value".into(),
             },
-            ping: crate::config::PingConfig { interval_s: 30, grace_period_s: 60 },
+            ping: crate::config::PingConfig {
+                interval_s: 30,
+                grace_period_s: 60,
+            },
             speed_test: crate::config::SpeedTestConfig {
                 probe_size_bytes: 262144,
                 full_test_payload_bytes: 10485760,
                 full_test_schedule: "0 */6 * * *".into(),
             },
-            alerts: crate::config::AlertConfig { latency_threshold_ms: 100.0, loss_threshold_pct: 5.0 },
-            logging: crate::config::LoggingConfig { level: "info".into(), retention_days: 30 },
+            alerts: crate::config::AlertConfig {
+                latency_threshold_ms: 100.0,
+                loss_threshold_pct: 5.0,
+            },
+            logging: crate::config::LoggingConfig {
+                level: "info".into(),
+                retention_days: 30,
+            },
         };
         let sanitized = sanitize_config(&config);
         let json = serde_json::to_string(&sanitized).unwrap();

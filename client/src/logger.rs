@@ -72,12 +72,7 @@ impl<'a> Write for DailyFileWriteGuard<'a> {
 
         if state.current_date != today || state.file.is_none() {
             let path = self.writer.log_path(&today);
-            state.file = Some(
-                OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(path)?,
-            );
+            state.file = Some(OpenOptions::new().create(true).append(true).open(path)?);
             state.current_date = today;
         }
 

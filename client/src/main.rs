@@ -2,18 +2,22 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
+mod agent;
 mod config;
 mod logger;
 mod messages;
 mod service;
 mod speed_test;
-mod agent;
 mod websocket;
 
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "pingpulse", version, about = "PingPulse network monitor daemon")]
+#[command(
+    name = "pingpulse",
+    version,
+    about = "PingPulse network monitor daemon"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -46,6 +50,8 @@ enum Commands {
     Stop,
     /// Check the daemon status
     Status,
+    /// Completely uninstall PingPulse (stop service, remove binary, config, and Login Item)
+    Uninstall,
     /// Run the local management API server (standalone, for development)
     Agent {
         /// Port for the local management API
@@ -59,7 +65,12 @@ async fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Register { token, name, location, server } => {
+        Commands::Register {
+            token,
+            name,
+            location,
+            server,
+        } => {
             if let Err(e) = cmd_register(&server, &token, &name, &location).await {
                 eprintln!("Registration failed: {e}");
                 std::process::exit(1);
@@ -82,14 +93,18 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Status => {
-            match service::status() {
-                Ok(true) => println!("PingPulse is running"),
-                Ok(false) => println!("PingPulse is not running"),
-                Err(e) => {
-                    eprintln!("Status check failed: {e}");
-                    std::process::exit(1);
-                }
+        Commands::Status => match service::status() {
+            Ok(true) => println!("PingPulse is running"),
+            Ok(false) => println!("PingPulse is not running"),
+            Err(e) => {
+                eprintln!("Status check failed: {e}");
+                std::process::exit(1);
+            }
+        },
+        Commands::Uninstall => {
+            if let Err(e) = service::uninstall() {
+                eprintln!("Uninstall failed: {e}");
+                std::process::exit(1);
             }
         }
         Commands::Agent { port } => {
@@ -119,7 +134,9 @@ async fn cmd_register(server: &str, token: &str, name: &str, location: &str) -> 
         let body: serde_json::Value = resp.json().await?;
         anyhow::bail!(
             "Server returned error: {}",
-            body.get("error").and_then(|e| e.as_str()).unwrap_or("unknown error")
+            body.get("error")
+                .and_then(|e| e.as_str())
+                .unwrap_or("unknown error")
         );
     }
 
@@ -142,7 +159,10 @@ async fn cmd_register(server: &str, token: &str, name: &str, location: &str) -> 
 
     println!("Registered successfully!");
     println!("  Client ID: {}", reg.client_id);
-    println!("  Config saved to: {}", config::Config::config_path().display());
+    println!(
+        "  Config saved to: {}",
+        config::Config::config_path().display()
+    );
     println!();
     println!("Start the daemon with: pingpulse start");
 

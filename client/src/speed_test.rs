@@ -30,7 +30,11 @@ pub async fn run_probe(
     client_id: &str,
     payload_size: u64,
 ) -> anyhow::Result<SpeedTestResult> {
-    info!(event = "speed_test_start", test_type = "probe", payload_bytes = payload_size);
+    info!(
+        event = "speed_test_start",
+        test_type = "probe",
+        payload_bytes = payload_size
+    );
 
     let start = Instant::now();
 
@@ -75,7 +79,11 @@ pub async fn run_full(
     const STREAMS: u64 = 4;
     let chunk_size = total_payload / STREAMS;
 
-    info!(event = "speed_test_start", test_type = "full", payload_bytes = total_payload);
+    info!(
+        event = "speed_test_start",
+        test_type = "full",
+        payload_bytes = total_payload
+    );
 
     let start = Instant::now();
 
