@@ -22,27 +22,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read version and check tag
+      - name: Read version and check tag/release
         id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           version=$(grep '^version' client/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           tag="client-v${version}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          if git ls-remote --tags origin "refs/tags/${tag}" | grep -q "${tag}"; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
+          if gh release view "${tag}" &>/dev/null; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+          if git ls-remote --tags origin "refs/tags/${tag}" | grep -q "${tag}"; then
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create and push tag
-        if: steps.check.outputs.exists == 'false'
+        if: steps.check.outputs.tag_exists == 'false'
         run: |
           git tag ${{ steps.check.outputs.tag }}
           git push origin ${{ steps.check.outputs.tag }}
 
   build:
     needs: [tag]
-    if: always() && (needs.tag.result == 'skipped' || needs.tag.outputs.exists == 'false')
+    if: always() && (needs.tag.result == 'skipped' || needs.tag.outputs.released == 'false')
     strategy:
       matrix:
         include:
