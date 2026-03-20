@@ -5,6 +5,7 @@ import type {
   SpeedTestResult,
   AlertRecord,
   WSMessage,
+  ServerLogEntry,
 } from "@/types";
 import { DEFAULT_CLIENT_CONFIG } from "@/types";
 import { hashString } from "@/utils/hash";
@@ -127,6 +128,17 @@ export class ClientMonitor implements DurableObject {
         config: this.config,
       } satisfies WSMessage)
     );
+
+    // Send recent server-side logs so the client has context
+    const entries = await this.gatherRecentLogs();
+    if (entries.length > 0) {
+      server.send(
+        JSON.stringify({
+          type: "server_logs",
+          entries,
+        } satisfies WSMessage)
+      );
+    }
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -603,6 +615,66 @@ export class ClientMonitor implements DurableObject {
   private handleSpeedTestTrigger(): Response {
     this.broadcast({ type: "start_speed_test", test_type: "full" });
     return new Response("OK");
+  }
+
+  private async gatherRecentLogs(): Promise<ServerLogEntry[]> {
+    if (!this.clientId) return [];
+
+    const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    const hourAgo = new Date(Date.now() - 60 * 60_000).toISOString();
+
+    const [alertsResult, outagesResult, summary] = await Promise.all([
+      this.env.DB.prepare(
+        "SELECT type, severity, value, threshold, timestamp FROM alerts WHERE client_id = ? AND timestamp > ? ORDER BY timestamp DESC LIMIT 20"
+      )
+        .bind(this.clientId, since)
+        .all<{ type: string; severity: string; value: number; threshold: number; timestamp: string }>(),
+      this.env.DB.prepare(
+        "SELECT start_ts, end_ts, duration_s FROM outages WHERE client_id = ? AND start_ts > ? ORDER BY start_ts DESC LIMIT 10"
+      )
+        .bind(this.clientId, since)
+        .all<{ start_ts: string; end_ts: string | null; duration_s: number | null }>(),
+      this.env.DB.prepare(
+        "SELECT COUNT(*) as total, SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END) as ok_count, AVG(CASE WHEN status = 'ok' THEN rtt_ms END) as avg_rtt FROM ping_results WHERE client_id = ? AND timestamp > ?"
+      )
+        .bind(this.clientId, hourAgo)
+        .first<{ total: number; ok_count: number; avg_rtt: number | null }>(),
+    ]);
+
+    const entries: ServerLogEntry[] = [];
+
+    for (const a of alertsResult.results) {
+      entries.push({
+        ts: a.timestamp,
+        level: a.severity === "critical" ? "error" : a.severity === "warning" ? "warning" : "info",
+        event: `alert:${a.type}`,
+        detail: `value=${a.value} threshold=${a.threshold}`,
+      });
+    }
+
+    for (const o of outagesResult.results) {
+      entries.push({
+        ts: o.start_ts,
+        level: "error",
+        event: "outage:start",
+        detail: o.end_ts
+          ? `ended=${o.end_ts} duration=${o.duration_s}s`
+          : "ongoing",
+      });
+    }
+
+    if (summary && summary.total > 0) {
+      const lossPct = ((summary.total - summary.ok_count) / summary.total * 100).toFixed(1);
+      entries.push({
+        ts: new Date().toISOString(),
+        level: "info",
+        event: "server:ping_summary",
+        detail: `last_hour: ${summary.total} pings, ${summary.ok_count} ok, avg_rtt=${summary.avg_rtt?.toFixed(1) ?? "N/A"}ms, loss=${lossPct}%`,
+      });
+    }
+
+    entries.sort((a, b) => a.ts.localeCompare(b.ts));
+    return entries;
   }
 
   private async triggerAlert(

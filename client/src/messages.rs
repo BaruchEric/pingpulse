@@ -23,6 +23,23 @@ pub struct SpeedTestResult {
     pub duration_ms: u64,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum LogLevel {
+    Info,
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+pub struct ServerLogEntry {
+    pub ts: String,
+    pub level: LogLevel,
+    pub event: String,
+    pub detail: Option<String>,
+}
+
 // --- Incoming messages (from server) ---
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +65,9 @@ pub enum IncomingMessage {
     },
     Deregistered {
         reason: String,
+    },
+    ServerLogs {
+        entries: Vec<ServerLogEntry>,
     },
 }
 

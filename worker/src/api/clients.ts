@@ -146,12 +146,8 @@ clientRoutes.put("/:id", async (c) => {
 clientRoutes.delete("/:id", async (c) => {
   const id = c.req.param("id");
 
-  const { deleted } = await deleteClientCascade(c.env.DB, id);
-  if (!deleted) {
-    return c.json({ error: "Client not found" }, 404);
-  }
-
-  // Notify connected agent after confirming client exists (best-effort)
+  // Notify the connected agent BEFORE deleting data so the WebSocket
+  // deregistration message reaches the client while auth records still exist
   try {
     const doId = c.env.CLIENT_MONITOR.idFromName(id);
     const stub = c.env.CLIENT_MONITOR.get(doId);
@@ -164,5 +160,9 @@ clientRoutes.delete("/:id", async (c) => {
     // Best effort — agent may not be connected
   }
 
+  const { deleted } = await deleteClientCascade(c.env.DB, id);
+  if (!deleted) {
+    return c.json({ error: "Client not found" }, 404);
+  }
   return c.json({ ok: true });
 });

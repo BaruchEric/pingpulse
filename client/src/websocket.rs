@@ -7,7 +7,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
 
 use crate::config::Config;
-use crate::messages::{IncomingMessage, OutgoingMessage, SpeedTestType};
+use crate::messages::{IncomingMessage, LogLevel, OutgoingMessage, SpeedTestType};
 use crate::speed_test;
 
 type WsSink = futures_util::stream::SplitSink<
@@ -281,6 +281,28 @@ async fn handle_message(
         IncomingMessage::Deregistered { reason } => {
             warn!(event = "deregistered_by_server", reason = %reason);
             return Some(Shutdown::Deregistered);
+        }
+
+        IncomingMessage::ServerLogs { entries } => {
+            info!(event = "server_logs_received", count = entries.len());
+            for entry in &entries {
+                let detail = entry.detail.as_deref().unwrap_or("");
+                macro_rules! log_entry {
+                    ($macro:ident) => {
+                        $macro!(
+                            event = "server_log",
+                            server_event = %entry.event,
+                            server_ts = %entry.ts,
+                            detail = %detail,
+                        )
+                    };
+                }
+                match entry.level {
+                    LogLevel::Error => log_entry!(error),
+                    LogLevel::Warning => log_entry!(warn),
+                    LogLevel::Info => log_entry!(info),
+                }
+            }
         }
 
         IncomingMessage::StartSpeedTest { test_type } => {

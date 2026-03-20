@@ -72,6 +72,13 @@ export interface JwtPayload {
   exp: number;
 }
 
+export interface ServerLogEntry {
+  ts: string;
+  level: "info" | "warning" | "error";
+  event: string;
+  detail?: string;
+}
+
 export type WSMessage =
   | { type: "ping"; id: string; ts: number; payload?: ArrayBuffer }
   | { type: "pong"; id: string; ts: number; client_ts: number }
@@ -79,4 +86,5 @@ export type WSMessage =
   | { type: "start_speed_test"; test_type: "probe" | "full" }
   | { type: "speed_test_result"; result: SpeedTestResult }
   | { type: "error"; message: string }
-  | { type: "deregistered"; reason: string };
+  | { type: "deregistered"; reason: string }
+  | { type: "server_logs"; entries: ServerLogEntry[] };
