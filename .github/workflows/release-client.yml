@@ -4,12 +4,45 @@ on:
   push:
     tags:
       - 'client-v*'
+    branches:
+      - master
+    paths:
+      - 'client/**'
 
 permissions:
   contents: write
 
 jobs:
+  tag:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version and check tag
+        id: check
+        run: |
+          version=$(grep '^version' client/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          tag="client-v${version}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          if git ls-remote --tags origin "refs/tags/${tag}" | grep -q "${tag}"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git tag ${{ steps.check.outputs.tag }}
+          git push origin ${{ steps.check.outputs.tag }}
+
   build:
+    needs: [tag]
+    if: always() && (needs.tag.result == 'skipped' || needs.tag.outputs.exists == 'false')
     strategy:
       matrix:
         include:
@@ -78,15 +111,28 @@ jobs:
           path: ${{ runner.os == 'Windows' && format('{0}.zip', matrix.name) || format('{0}.tar.gz', matrix.name) }}
 
   release:
-    needs: build
+    needs: [tag, build]
+    if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: resolve
+        run: |
+          if [ "${{ needs.tag.outputs.tag }}" != "" ]; then
+            echo "tag=${{ needs.tag.outputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.resolve.outputs.tag }}
           files: |
             pingpulse-darwin-arm64/pingpulse-darwin-arm64.tar.gz
             pingpulse-linux-amd64/pingpulse-linux-amd64.tar.gz
