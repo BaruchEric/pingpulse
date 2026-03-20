@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.check.outputs.tag }}
-      exists: ${{ steps.check.outputs.exists }}
+      released: ${{ steps.check.outputs.released }}
     steps:
       - uses: actions/checkout@v4
 
