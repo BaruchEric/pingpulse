@@ -1,6 +1,7 @@
 name: Release Client
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'client-v*'
@@ -8,6 +9,7 @@ on:
       - master
     paths:
       - 'client/**'
+      - '.github/workflows/release-client.yml'
 
 permissions:
   contents: write
