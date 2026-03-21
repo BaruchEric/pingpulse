@@ -233,11 +233,12 @@ function ConfigEditor({
   onSave,
   busy,
 }: {
-  config: { ping_interval_s: number; alert_latency_threshold_ms: number; alert_loss_threshold_pct: number; grace_period_s: number };
+  config: { ping_interval_s: number; speed_test_interval_s: number; alert_latency_threshold_ms: number; alert_loss_threshold_pct: number; grace_period_s: number };
   onSave: (c: Record<string, unknown>) => void;
   busy: boolean;
 }) {
   const [interval, setInterval_] = useState(String(config.ping_interval_s));
+  const [speedInterval, setSpeedInterval] = useState(String(config.speed_test_interval_s));
   const [latency, setLatency] = useState(String(config.alert_latency_threshold_ms));
   const [loss, setLoss] = useState(String(config.alert_loss_threshold_pct));
   const [grace, setGrace] = useState(String(config.grace_period_s));
@@ -248,6 +249,10 @@ function ConfigEditor({
         <div>
           <label className="block text-xs text-zinc-500">Ping Interval (s)</label>
           <input type="number" min="5" value={interval} onChange={(e) => setInterval_(e.target.value)} className={INPUT_CLASS} />
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-500">Speed Test Interval (s)</label>
+          <input type="number" min="60" value={speedInterval} onChange={(e) => setSpeedInterval(e.target.value)} className={INPUT_CLASS} />
         </div>
         <div>
           <label className="block text-xs text-zinc-500">Grace Period (s)</label>
@@ -265,6 +270,7 @@ function ConfigEditor({
       <button
         onClick={() => onSave({
           ping_interval_s: parseInt(interval),
+          speed_test_interval_s: parseInt(speedInterval),
           alert_latency_threshold_ms: parseFloat(latency),
           alert_loss_threshold_pct: parseFloat(loss),
           grace_period_s: parseInt(grace),

@@ -26,6 +26,7 @@ pub struct PingConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpeedTestConfig {
+    pub interval_s: u32,
     pub probe_size_bytes: u64,
     pub full_test_payload_bytes: u64,
     pub full_test_schedule: String,
@@ -48,12 +49,18 @@ pub struct LoggingConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct RemoteConfig {
     pub ping_interval_s: u32,
+    #[serde(default = "default_speed_test_interval")]
+    pub speed_test_interval_s: u32,
     pub probe_size_bytes: u64,
     pub full_test_payload_bytes: u64,
     pub full_test_schedule: String,
     pub alert_latency_threshold_ms: f64,
     pub alert_loss_threshold_pct: f64,
     pub grace_period_s: u32,
+}
+
+fn default_speed_test_interval() -> u32 {
+    300
 }
 
 impl Config {
@@ -74,6 +81,7 @@ impl Config {
     pub fn apply_remote(&mut self, remote: &RemoteConfig) {
         self.ping.interval_s = remote.ping_interval_s;
         self.ping.grace_period_s = remote.grace_period_s;
+        self.speed_test.interval_s = remote.speed_test_interval_s;
         self.speed_test.probe_size_bytes = remote.probe_size_bytes;
         self.speed_test.full_test_payload_bytes = remote.full_test_payload_bytes;
         self.speed_test.full_test_schedule = remote.full_test_schedule.clone();
@@ -99,6 +107,7 @@ impl Config {
                 grace_period_s: 60,
             },
             speed_test: SpeedTestConfig {
+                interval_s: 300,
                 probe_size_bytes: 262144,
                 full_test_payload_bytes: 10_485_760,
                 full_test_schedule: "0 */6 * * *".into(),
@@ -149,6 +158,7 @@ mod tests {
                 grace_period_s: 60,
             },
             speed_test: SpeedTestConfig {
+                interval_s: 300,
                 probe_size_bytes: 262144,
                 full_test_payload_bytes: 10485760,
                 full_test_schedule: "0 */6 * * *".into(),
@@ -201,6 +211,7 @@ mod tests {
                 grace_period_s: 60,
             },
             speed_test: SpeedTestConfig {
+                interval_s: 300,
                 probe_size_bytes: 262144,
                 full_test_payload_bytes: 10485760,
                 full_test_schedule: "0 */6 * * *".into(),
@@ -217,6 +228,7 @@ mod tests {
 
         let remote = RemoteConfig {
             ping_interval_s: 15,
+            speed_test_interval_s: 180,
             probe_size_bytes: 131072,
             full_test_payload_bytes: 5242880,
             full_test_schedule: "0 */3 * * *".into(),

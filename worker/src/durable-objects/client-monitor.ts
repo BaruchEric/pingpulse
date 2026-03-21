@@ -590,9 +590,10 @@ export class ClientMonitor implements DurableObject {
 
         // Only pick known config keys to prevent arbitrary data injection
         const allowed: (keyof ClientConfig)[] = [
-          "ping_interval_s", "probe_size_bytes", "full_test_schedule",
-          "full_test_payload_bytes", "alert_latency_threshold_ms",
-          "alert_loss_threshold_pct", "grace_period_s",
+          "ping_interval_s", "speed_test_interval_s", "probe_size_bytes",
+          "full_test_schedule", "full_test_payload_bytes",
+          "alert_latency_threshold_ms", "alert_loss_threshold_pct",
+          "grace_period_s",
         ];
         const configUpdates: Partial<ClientConfig> = {};
         for (const key of allowed) {

@@ -162,6 +162,9 @@ async fn connect_and_run(
     ping_interval.tick().await; // Skip the immediate first tick
     let mut ping_counter: u64 = 0;
 
+    let mut speed_test_interval = time::interval(Duration::from_secs(config.speed_test.interval_s as u64));
+    speed_test_interval.tick().await; // Skip the immediate first tick
+
     let (speed_tx, mut speed_rx) = mpsc::unbounded_channel::<OutgoingMessage>();
 
     let shutdown = shutdown_signal();
@@ -180,6 +183,7 @@ async fn connect_and_run(
                                     http,
                                     &mut sink,
                                     &mut ping_interval,
+                                    &mut speed_test_interval,
                                     &speed_tx,
                                 ).await {
                                     return Ok(shutdown);
@@ -215,6 +219,31 @@ async fn connect_and_run(
                 info!(event = "ping_sent", id = format!("client-{ping_counter}"));
             }
 
+            _ = speed_test_interval.tick() => {
+                info!(event = "speed_test_interval_trigger", test_type = "probe");
+                let http = http.clone();
+                let base_url = config.server.base_url.clone();
+                let client_id = config.server.client_id.clone();
+                let probe_size = config.speed_test.probe_size_bytes;
+                let tx = speed_tx.clone();
+
+                tokio::spawn(async move {
+                    let result = speed_test::run_probe(&http, &base_url, &client_id, probe_size).await;
+                    let msg = match result {
+                        Ok(result) => OutgoingMessage::SpeedTestResult { result },
+                        Err(e) => {
+                            error!(event = "speed_test_interval_error", error = %e);
+                            OutgoingMessage::Error {
+                                message: format!("Speed test failed: {e}"),
+                            }
+                        }
+                    };
+                    if tx.send(msg).is_err() {
+                        warn!(event = "speed_test_channel_closed");
+                    }
+                });
+            }
+
             Some(msg) = speed_rx.recv() => {
                 let json = serde_json::to_string(&msg).unwrap();
                 if let Err(e) = sink.send(Message::Text(json.into())).await {
@@ -237,6 +266,7 @@ async fn handle_message(
     http: &reqwest::Client,
     sink: &mut WsSink,
     ping_interval: &mut time::Interval,
+    speed_test_interval: &mut time::Interval,
     speed_tx: &mpsc::UnboundedSender<OutgoingMessage>,
 ) -> Option<Shutdown> {
     match msg {
@@ -264,6 +294,7 @@ async fn handle_message(
 
         IncomingMessage::ConfigUpdate { config: remote } => {
             let old_interval = config.ping.interval_s;
+            let old_speed_interval = config.speed_test.interval_s;
             let old_probe = config.speed_test.probe_size_bytes;
             let old_full = config.speed_test.full_test_payload_bytes;
             let old_latency = config.alerts.latency_threshold_ms;
@@ -278,10 +309,16 @@ async fn handle_message(
                 *ping_interval = time::interval(Duration::from_secs(config.ping.interval_s as u64));
                 ping_interval.tick().await; // Skip immediate tick
             }
+            if config.speed_test.interval_s != old_speed_interval {
+                *speed_test_interval = time::interval(Duration::from_secs(config.speed_test.interval_s as u64));
+                speed_test_interval.tick().await; // Skip immediate tick
+            }
             info!(
                 event = "config_updated",
                 ping_interval_s = config.ping.interval_s,
+                speed_test_interval_s = config.speed_test.interval_s,
                 interval_changed = (config.ping.interval_s != old_interval),
+                speed_test_interval_changed = (config.speed_test.interval_s != old_speed_interval),
                 probe_changed = (config.speed_test.probe_size_bytes != old_probe),
                 full_payload_changed = (config.speed_test.full_test_payload_bytes != old_full),
                 latency_threshold_changed = (config.alerts.latency_threshold_ms != old_latency),

@@ -1,5 +1,6 @@
 export interface ClientConfig {
   ping_interval_s: number;
+  speed_test_interval_s: number;
   probe_size_bytes: number;
   full_test_schedule: string;
   full_test_payload_bytes: number;
@@ -10,6 +11,7 @@ export interface ClientConfig {
 
 export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   ping_interval_s: 30,
+  speed_test_interval_s: 300,
   probe_size_bytes: 256 * 1024,
   full_test_schedule: "0 */6 * * *",
   full_test_payload_bytes: 10 * 1024 * 1024,

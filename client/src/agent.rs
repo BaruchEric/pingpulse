@@ -358,6 +358,7 @@ mod tests {
                 grace_period_s: 60,
             },
             speed_test: crate::config::SpeedTestConfig {
+                interval_s: 300,
                 probe_size_bytes: 262144,
                 full_test_payload_bytes: 10485760,
                 full_test_schedule: "0 */6 * * *".into(),
