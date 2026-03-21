@@ -8,6 +8,7 @@ mod logger;
 mod messages;
 mod service;
 mod speed_test;
+mod probe;
 mod store;
 mod websocket;
 
