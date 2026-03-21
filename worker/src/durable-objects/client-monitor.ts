@@ -112,7 +112,12 @@ export class ClientMonitor implements DurableObject {
     this.state.acceptWebSocket(server, [this.clientId]);
 
     // Client connected — clear any disconnection state
+    // Restore from storage in case DO hibernated
+    if (!this.disconnectedAt) {
+      this.disconnectedAt = await this.state.storage.get<number>("disconnectedAt") ?? null;
+    }
     if (this.disconnectedAt) {
+      await this.state.storage.delete("disconnectedAt");
       await this.handleReconnect();
     }
 
@@ -290,6 +295,10 @@ export class ClientMonitor implements DurableObject {
     await this.ensureConfigLoaded();
 
     // Check if this is a disconnection grace period check
+    // Restore disconnectedAt from durable storage (survives hibernation)
+    if (!this.disconnectedAt) {
+      this.disconnectedAt = await this.state.storage.get<number>("disconnectedAt") ?? null;
+    }
     if (this.disconnectedAt && this.sessions.length === 0) {
       const gracePeriod = (this.config.down_alert_grace_seconds ?? this.config.grace_period_s) * 1000;
       const elapsed = Date.now() - this.disconnectedAt;
@@ -363,9 +372,12 @@ export class ClientMonitor implements DurableObject {
 
   private async handleSessionDrop(_ws: WebSocket): Promise<void> {
     if (this.sessions.length === 0) {
-      this.disconnectedAt = Date.now();
+      const now = Date.now();
+      this.disconnectedAt = now;
+      await this.state.storage.put("disconnectedAt", now);
+      await this.ensureConfigLoaded();
       await this.state.storage.setAlarm(
-        Date.now() + this.config.grace_period_s * 1000
+        now + this.config.grace_period_s * 1000
       );
     }
   }
