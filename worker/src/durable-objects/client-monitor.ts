@@ -91,8 +91,11 @@ export class ClientMonitor implements DurableObject {
     }
 
     const secret = authHeader.slice(7);
-    const isValid = await this.validateSecret(secret);
-    if (!isValid) {
+    const authResult = await this.validateSecret(secret);
+    if (authResult === "not_found") {
+      return new Response("Client deleted", { status: 410 });
+    }
+    if (authResult === "invalid") {
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -327,8 +330,8 @@ export class ClientMonitor implements DurableObject {
     return (timeouts / this.lossRing.length) * 100;
   }
 
-  private async validateSecret(secret: string): Promise<boolean> {
-    if (!this.clientId) return false;
+  private async validateSecret(secret: string): Promise<"valid" | "invalid" | "not_found"> {
+    if (!this.clientId) return "invalid";
 
     const hash = await hashString(secret);
     const row = await this.env.DB.prepare(
@@ -337,7 +340,8 @@ export class ClientMonitor implements DurableObject {
       .bind(this.clientId)
       .first<{ secret_hash: string }>();
 
-    return row?.secret_hash === hash;
+    if (!row) return "not_found";
+    return row.secret_hash === hash ? "valid" : "invalid";
   }
 
   private broadcast(msg: WSMessage): void {

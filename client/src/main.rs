@@ -117,6 +117,13 @@ async fn main() {
 }
 
 async fn cmd_register(server: &str, token: &str, name: &str, location: &str) -> anyhow::Result<()> {
+    if config::Config::config_path().exists() {
+        println!("Existing config found — cleaning up old installation...");
+        let _ = service::stop();
+        let _ = service::cleanup_data();
+        println!("Old installation removed.");
+    }
+
     println!("Registering with {}...", server);
 
     let client = reqwest::Client::new();

@@ -93,6 +93,14 @@ if [[ -z "$NAME" || -z "$LOCATION" ]]; then
   exit 1
 fi
 
+# --- Clean up any existing installation ---
+if [[ -f "$HOME/.pingpulse/config.toml" ]]; then
+  echo "Existing PingPulse installation detected — cleaning up..."
+  pingpulse stop 2>/dev/null || true
+  rm -rf "$HOME/.pingpulse"
+  echo "Old installation removed."
+fi
+
 # --- Register ---
 echo ""
 echo "Registering client '${NAME}' at '${LOCATION}'..."

@@ -57,6 +57,18 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             }
             Err(e) => {
                 let err_str = e.to_string();
+
+                // 410 Gone = server confirmed client was deleted
+                let is_gone = err_str.contains("410") || err_str.contains("Client deleted");
+                if is_gone {
+                    warn!(
+                        event = "deregistered_confirmed",
+                        message = "Server returned 410 Gone — client was deleted"
+                    );
+                    stop_service();
+                    return Ok(());
+                }
+
                 let is_auth_failure = err_str.contains("401")
                     || err_str.contains("Unauthorized")
                     || err_str.contains("403");
