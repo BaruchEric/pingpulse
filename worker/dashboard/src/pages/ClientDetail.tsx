@@ -8,6 +8,7 @@ import { TimeRangeSelector } from "@/components/TimeRangeSelector";
 import { LatencyChart } from "@/components/LatencyChart";
 import { ThroughputChart } from "@/components/ThroughputChart";
 import { WanQualityChart } from "@/components/WanQualityChart";
+import { ConnectionStateChart } from "@/components/ConnectionStateChart";
 import { OutageTimeline } from "@/components/OutageTimeline";
 import { AlertRow } from "@/components/AlertRow";
 
@@ -147,6 +148,14 @@ export function ClientDetail() {
       {/* WAN Quality chart */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
         <WanQualityChart clientId={clientId} {...getTimeRange(range)} />
+      </div>
+
+      {/* Connection State chart */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+        <ConnectionStateChart
+          pings={metrics?.pings || []}
+          outages={metrics?.outages || []}
+        />
       </div>
 
       {/* Throughput chart */}
