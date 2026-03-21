@@ -66,6 +66,7 @@ export interface ClientRecord {
   config_json: string;
   created_at: string;
   last_seen: string;
+  client_version: string;
 }
 
 export interface JwtPayload {

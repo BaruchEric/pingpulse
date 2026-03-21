@@ -99,6 +99,9 @@ export class ClientMonitor implements DurableObject {
       return new Response("Unauthorized", { status: 401 });
     }
 
+    // Capture client version from header
+    const clientVersion = request.headers.get("X-Client-Version") || "";
+
     // Accept WebSocket
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -110,10 +113,15 @@ export class ClientMonitor implements DurableObject {
       await this.handleReconnect();
     }
 
-    // Update last_seen and load config in parallel (independent DB calls)
+    // Update last_seen, client_version, and load config in parallel
     await Promise.all([
       this.updateLastSeen(),
       this.ensureConfigLoaded(),
+      clientVersion
+        ? this.env.DB.prepare("UPDATE clients SET client_version = ? WHERE id = ?")
+            .bind(clientVersion, this.clientId)
+            .run()
+        : Promise.resolve(),
     ]);
 
     // Start ping alarm if not already running

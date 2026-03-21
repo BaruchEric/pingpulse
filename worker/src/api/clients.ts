@@ -10,7 +10,7 @@ clientRoutes.use("*", authGuard);
 clientRoutes.get("/", async (c) => {
   const [clientsResult, pingStatsResult, speedTestResult] = await c.env.DB.batch([
     c.env.DB.prepare(
-      "SELECT id, name, location, config_json, created_at, last_seen FROM clients ORDER BY created_at DESC"
+      "SELECT id, name, location, config_json, created_at, last_seen, client_version FROM clients ORDER BY created_at DESC"
     ),
     c.env.DB.prepare(`
       SELECT
@@ -59,6 +59,7 @@ clientRoutes.get("/", async (c) => {
       id: r.id,
       name: r.name,
       location: r.location,
+      client_version: r.client_version || "",
       config: JSON.parse(r.config_json as string),
       created_at: r.created_at,
       last_seen: r.last_seen,
@@ -82,7 +83,7 @@ clientRoutes.get("/", async (c) => {
 clientRoutes.get("/:id", async (c) => {
   const id = c.req.param("id");
   const row = await c.env.DB.prepare(
-    "SELECT id, name, location, config_json, created_at, last_seen FROM clients WHERE id = ?"
+    "SELECT id, name, location, config_json, created_at, last_seen, client_version FROM clients WHERE id = ?"
   )
     .bind(id)
     .first();

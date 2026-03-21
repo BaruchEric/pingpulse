@@ -143,6 +143,7 @@ async fn connect_and_run(
             format!("Bearer {}", config.server.client_secret),
         )
         .header("Host", url::Url::parse(base)?.host_str().unwrap_or(""))
+        .header("X-Client-Version", env!("CARGO_PKG_VERSION"))
         .header("Connection", "Upgrade")
         .header("Upgrade", "websocket")
         .header("Sec-WebSocket-Version", "13")
