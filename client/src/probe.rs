@@ -48,20 +48,17 @@ impl ProbeEngine {
         let now_ms = chrono::Utc::now().timestamp_millis();
         let timeout = Duration::from_millis(timeout_ms);
 
-        let ping_client = match &self.ping_client {
-            Some(c) => c,
-            None => {
-                return ProbeRecord {
-                    seq_id: 0,
-                    probe_type: "icmp".into(),
-                    target: target.label.clone(),
-                    timestamp: now_ms,
-                    rtt_ms: None,
-                    status_code: None,
-                    status: "error".into(),
-                    jitter_ms: None,
-                };
-            }
+        let Some(ping_client) = &self.ping_client else {
+            return ProbeRecord {
+                seq_id: 0,
+                probe_type: "icmp".into(),
+                target: target.label.clone(),
+                timestamp: now_ms,
+                rtt_ms: None,
+                status_code: None,
+                status: "error".into(),
+                jitter_ms: None,
+            };
         };
 
         let mut pinger = ping_client.pinger(target.addr, PingIdentifier(rand::random())).await;
@@ -113,7 +110,7 @@ impl ProbeEngine {
         match client.head(&target.url).send().await {
             Ok(resp) => {
                 let rtt_ms = start.elapsed().as_secs_f64() * 1000.0;
-                let status_code = resp.status().as_u16() as i32;
+                let status_code = i32::from(resp.status().as_u16());
                 debug!(target = %target.url, rtt_ms, status_code, "HTTP probe ok");
                 ProbeRecord {
                     seq_id: 0,

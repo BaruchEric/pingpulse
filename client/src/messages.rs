@@ -79,6 +79,10 @@ pub enum OutgoingMessage {
     Pong { id: String, ts: u64, client_ts: u64 },
     Ping { id: String, ts: u64 },
     SpeedTestResult { result: SpeedTestResult },
+    ProbeResult {
+        session_id: String,
+        record: crate::store::ProbeRecord,
+    },
     Error { message: String },
 }
 
@@ -171,6 +175,27 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains(r#""type":"ping""#));
         assert!(json.contains(r#""ts":1710700001000"#));
+    }
+
+    #[test]
+    fn test_serialize_probe_result() {
+        let msg = OutgoingMessage::ProbeResult {
+            session_id: "sess-123".into(),
+            record: crate::store::ProbeRecord {
+                seq_id: 42,
+                probe_type: "icmp".into(),
+                target: "8.8.8.8".into(),
+                timestamp: 1710700000000,
+                rtt_ms: Some(12.5),
+                status_code: None,
+                status: "ok".into(),
+                jitter_ms: None,
+            },
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""type":"probe_result""#));
+        assert!(json.contains(r#""session_id":"sess-123""#));
+        assert!(json.contains(r#""seq_id":42"#));
     }
 
     #[test]

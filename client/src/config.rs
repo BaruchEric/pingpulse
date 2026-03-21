@@ -97,21 +97,12 @@ impl Default for ProbeHttpConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProbesConfig {
     #[serde(default)]
     pub icmp: ProbeIcmpConfig,
     #[serde(default)]
     pub http: ProbeHttpConfig,
-}
-
-impl Default for ProbesConfig {
-    fn default() -> Self {
-        Self {
-            icmp: ProbeIcmpConfig::default(),
-            http: ProbeHttpConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -239,7 +230,7 @@ impl Config {
         let path = self
             .storage
             .db_path
-            .replace("~", &dirs::home_dir().unwrap().to_string_lossy());
+            .replace('~', &dirs::home_dir().unwrap().to_string_lossy());
         std::path::PathBuf::from(path)
     }
 
@@ -256,7 +247,7 @@ impl Config {
             self.probes.icmp.interval_s = v;
         }
         if let Some(v) = &remote.probe_icmp_targets {
-            self.probes.icmp.targets = v.clone();
+            self.probes.icmp.targets.clone_from(v);
         }
         if let Some(v) = remote.probe_icmp_timeout_ms {
             self.probes.icmp.timeout_ms = v;
@@ -265,7 +256,7 @@ impl Config {
             self.probes.http.interval_s = v;
         }
         if let Some(v) = &remote.probe_http_targets {
-            self.probes.http.targets = v.clone();
+            self.probes.http.targets.clone_from(v);
         }
         if let Some(v) = remote.probe_http_timeout_ms {
             self.probes.http.timeout_ms = v;

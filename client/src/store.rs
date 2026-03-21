@@ -120,6 +120,7 @@ impl ProbeStore {
             "SELECT seq_id, probe_type, target, timestamp, rtt_ms, status_code, status, jitter_ms
              FROM probe_results WHERE synced = 0 ORDER BY seq_id LIMIT ?1",
         )?;
+        #[allow(clippy::cast_possible_wrap)]
         let rows = stmt.query_map([limit as i64], |row| {
             Ok(ProbeRecord {
                 seq_id: row.get(0)?,
@@ -132,7 +133,7 @@ impl ProbeStore {
                 jitter_ms: row.get(7)?,
             })
         })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        Ok(rows.filter_map(std::result::Result::ok).collect())
     }
 
     pub fn mark_synced(&self, seq_ids: &[i64]) -> Result<()> {

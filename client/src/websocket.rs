@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -8,7 +9,10 @@ use tracing::{error, info, warn};
 
 use crate::config::Config;
 use crate::messages::{IncomingMessage, LogLevel, OutgoingMessage, SpeedTestType};
+use crate::probe::{HttpTarget, IcmpTarget, ProbeEngine};
 use crate::speed_test;
+use crate::store::ProbeStore;
+use crate::sync::SyncClient;
 
 type WsSink = futures_util::stream::SplitSink<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
@@ -27,14 +31,102 @@ fn now_ms() -> u64 {
 /// Max consecutive connection failures (401/auth errors) before assuming deregistered.
 const MAX_AUTH_FAILURES: u32 = 3;
 
+#[allow(clippy::too_many_lines)]
 pub async fn run(config: Config) -> anyhow::Result<()> {
     let http = reqwest::Client::new();
     let mut config = config;
     let mut backoff = Backoff::new();
     let mut consecutive_auth_failures: u32 = 0;
 
+    // --- Initialize probe store ---
+    let store = ProbeStore::open(&config.resolved_db_path())?;
+
+    // --- Build probe targets ---
+    let icmp_targets: Vec<IcmpTarget> = config
+        .probes
+        .icmp
+        .targets
+        .iter()
+        .filter_map(|t| {
+            t.parse::<IpAddr>()
+                .ok()
+                .map(|addr| IcmpTarget { addr, label: t.clone() })
+        })
+        .collect();
+
+    let http_targets: Vec<HttpTarget> = config
+        .probes
+        .http
+        .targets
+        .iter()
+        .map(|url| HttpTarget { url: url.clone() })
+        .collect();
+
+    // --- Spawn single background probe task with mpsc channel ---
+    let (probe_tx, mut probe_rx) = mpsc::channel::<crate::store::ProbeRecord>(256);
+
+    let probe_store = store.clone_handle();
+    let _probe_handle = tokio::spawn({
+        let icmp_targets = icmp_targets.clone();
+        let http_targets = http_targets.clone();
+        let icmp_interval_s = config.probes.icmp.interval_s;
+        let http_interval_s = config.probes.http.interval_s;
+        let icmp_timeout = config.probes.icmp.timeout_ms;
+        let http_timeout = config.probes.http.timeout_ms;
+        let icmp_enabled = config.probes.icmp.enabled;
+        let http_enabled = config.probes.http.enabled;
+        let retention_days = config.storage.retention_days;
+        let engine = ProbeEngine::new().unwrap();
+        let tx = probe_tx;
+
+        async move {
+            let mut icmp_tick =
+                tokio::time::interval(Duration::from_secs(u64::from(icmp_interval_s)));
+            let mut http_tick =
+                tokio::time::interval(Duration::from_secs(u64::from(http_interval_s)));
+            let mut cleanup_tick = tokio::time::interval(Duration::from_secs(3600));
+
+            // Skip the immediate first tick for all intervals
+            icmp_tick.tick().await;
+            http_tick.tick().await;
+            cleanup_tick.tick().await;
+
+            loop {
+                tokio::select! {
+                    _ = icmp_tick.tick() => {
+                        if icmp_enabled {
+                            for target in &icmp_targets {
+                                let record = engine.probe_icmp(target, icmp_timeout).await;
+                                if let Ok(seq_id) = probe_store.insert_probe(&record) {
+                                    let mut stored = record.clone();
+                                    stored.seq_id = seq_id;
+                                    tx.send(stored).await.ok();
+                                }
+                            }
+                        }
+                    }
+                    _ = http_tick.tick() => {
+                        if http_enabled {
+                            for target in &http_targets {
+                                let record = engine.probe_http(target, http_timeout).await;
+                                if let Ok(seq_id) = probe_store.insert_probe(&record) {
+                                    let mut stored = record.clone();
+                                    stored.seq_id = seq_id;
+                                    tx.send(stored).await.ok();
+                                }
+                            }
+                        }
+                    }
+                    _ = cleanup_tick.tick() => {
+                        probe_store.cleanup_old(retention_days).ok();
+                    }
+                }
+            }
+        }
+    });
+
     loop {
-        match connect_and_run(&mut config, &http, &mut backoff).await {
+        match connect_and_run(&mut config, &http, &mut backoff, &store, &mut probe_rx).await {
             Ok(Shutdown::Graceful) => {
                 info!(event = "shutdown", reason = "signal");
                 return Ok(());
@@ -130,6 +222,8 @@ async fn connect_and_run(
     config: &mut Config,
     http: &reqwest::Client,
     backoff: &mut Backoff,
+    store: &ProbeStore,
+    probe_rx: &mut mpsc::Receiver<crate::store::ProbeRecord>,
 ) -> anyhow::Result<Shutdown> {
     // Build WebSocket URL
     let base = &config.server.base_url;
@@ -167,12 +261,32 @@ async fn connect_and_run(
     info!(event = "ws_connected");
     backoff.reset();
 
+    // Trigger sync drain on reconnect (fire-and-forget)
+    tokio::spawn({
+        let sync_store = store.clone_handle();
+        let base_url = config.server.base_url.clone();
+        let client_id = config.server.client_id.clone();
+        let client_secret = config.server.client_secret.clone();
+        let batch_size = config.sync.batch_size;
+        async move {
+            let sc = SyncClient::new(&base_url, &client_id, &client_secret, batch_size);
+            match sc.sync_all(&sync_store).await {
+                Ok(n) if n > 0 => info!(records = n, "Reconnect sync complete"),
+                Ok(_) => {}
+                Err(e) => warn!(error = %e, "Reconnect sync failed"),
+            }
+        }
+    });
+
     let mut ping_interval = time::interval(Duration::from_secs(u64::from(config.ping.interval_s)));
     ping_interval.tick().await; // Skip the immediate first tick
     let mut ping_counter: u64 = 0;
 
     let mut speed_test_interval = time::interval(Duration::from_secs(u64::from(config.speed_test.interval_s)));
     speed_test_interval.tick().await; // Skip the immediate first tick
+
+    let mut sync_interval = time::interval(Duration::from_secs(u64::from(config.sync.interval_s)));
+    sync_interval.tick().await; // Skip the immediate first tick
 
     let (speed_tx, mut speed_rx) = mpsc::unbounded_channel::<OutgoingMessage>();
 
@@ -258,6 +372,31 @@ async fn connect_and_run(
                 if let Err(e) = sink.send(Message::Text(json.into())).await {
                     error!(event = "speed_test_send_error", error = %e);
                     return Ok(Shutdown::Disconnected);
+                }
+            }
+
+            // Forward real-time probe results over WebSocket
+            Some(record) = probe_rx.recv() => {
+                let msg = OutgoingMessage::ProbeResult {
+                    session_id: store.session_id().to_string(),
+                    record,
+                };
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    sink.send(Message::Text(json.into())).await.ok();
+                }
+            }
+
+            // Periodic sync of accumulated probe results
+            _ = sync_interval.tick() => {
+                let sync_store = store.clone_handle();
+                let sync_client = SyncClient::new(
+                    &config.server.base_url,
+                    &config.server.client_id,
+                    &config.server.client_secret,
+                    config.sync.batch_size,
+                );
+                if let Err(e) = sync_client.sync_all(&sync_store).await {
+                    warn!(error = %e, "Sync failed, will retry next interval");
                 }
             }
 
