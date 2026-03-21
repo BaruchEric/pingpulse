@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "pingpulse-db"
-database_id = "local"
+database_id = "bd86c029-0290-48c6-aa26-10fc55ba78f8"
 
 [[r2_buckets]]
 binding = "ARCHIVE"
@@ -23,7 +23,7 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["ClientMonitor"]
+new_sqlite_classes = ["ClientMonitor"]
 
 [[routes]]
 pattern = "ping.beric.ca"
