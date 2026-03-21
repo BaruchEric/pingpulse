@@ -85,3 +85,52 @@ metricsRoutes.get("/:id/logs", async (c) => {
 
   return c.json({ logs, total: countRow?.total || 0, limit, offset });
 });
+
+// GET /api/metrics/:clientId/probes?from=&to=&type=
+metricsRoutes.get("/:clientId/probes", async (c) => {
+  const clientId = c.req.param("clientId");
+  const from =
+    c.req.query("from") ?? String(Date.now() - 24 * 60 * 60 * 1000);
+  const to = c.req.query("to") ?? String(Date.now());
+  const probeType = c.req.query("type"); // optional: "icmp" | "http"
+
+  let sql = `SELECT timestamp, probe_type, target, rtt_ms, status_code, status, jitter_ms
+             FROM client_probe_results
+             WHERE client_id = ? AND timestamp >= ? AND timestamp <= ?`;
+  const params: unknown[] = [clientId, Number(from), Number(to)];
+
+  if (probeType) {
+    sql += " AND probe_type = ?";
+    params.push(probeType);
+  }
+
+  sql += " ORDER BY timestamp ASC LIMIT 10000";
+
+  const results = await c.env.DB.prepare(sql)
+    .bind(...params)
+    .all();
+  return c.json({ data: results.results ?? [] });
+});
+
+// GET /api/metrics/:clientId/sync-status
+metricsRoutes.get("/:clientId/sync-status", async (c) => {
+  const clientId = c.req.param("clientId");
+
+  const latest = await c.env.DB.prepare(
+    `SELECT MAX(received_at) as last_sync, COUNT(*) as total_records,
+            MAX(timestamp) as latest_probe_ts
+     FROM client_probe_results WHERE client_id = ?`
+  )
+    .bind(clientId)
+    .first<{
+      last_sync: number;
+      total_records: number;
+      latest_probe_ts: number;
+    }>();
+
+  return c.json({
+    last_sync: latest?.last_sync ?? null,
+    total_records: latest?.total_records ?? 0,
+    latest_probe_ts: latest?.latest_probe_ts ?? null,
+  });
+});
