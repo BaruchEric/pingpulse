@@ -8,6 +8,7 @@ import { alertRoutes } from "@/api/alerts";
 import { speedtestRoutes } from "@/api/speedtest";
 import { exportRoutes } from "@/api/export";
 import { commandRoutes } from "@/api/command";
+import { syncRoutes } from "@/api/sync";
 import { hashString } from "@/utils/hash";
 import { deleteClientCascade } from "@/utils/client-db";
 
@@ -56,6 +57,9 @@ export function createRouter() {
 
     return c.json({ ok: true });
   });
+
+  // Client sync endpoint (authenticated with client secret, not admin JWT)
+  app.route("/api/clients", syncRoutes);
 
   // Protected routes — auth applied per-route-file via .use("*", authGuard)
   app.route("/api/clients", clientRoutes);
