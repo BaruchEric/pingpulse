@@ -86,7 +86,7 @@ export function Clients() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge lastSeen={client.last_seen} />
+                    <StatusBadge lastSeen={client.last_seen} pingIntervalMs={client.config.ping_interval_s * 1000} />
                   </td>
                   <td className="px-4 py-3 font-mono text-zinc-400">{client.config.ping_interval_s}s</td>
                   <td className="px-4 py-3 font-mono text-xs text-zinc-500">

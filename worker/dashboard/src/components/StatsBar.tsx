@@ -4,7 +4,7 @@ import { getClientStatus } from "@/components/StatusBadge";
 export function StatsBar({ clients }: { clients: Client[] }) {
   const total = clients.length;
   const up = clients.filter(
-    (c) => getClientStatus(c.last_seen, c.config.grace_period_s * 1000) === "up"
+    (c) => getClientStatus(c.last_seen, c.config.ping_interval_s * 1000) === "up"
   ).length;
   const down = total - up;
 

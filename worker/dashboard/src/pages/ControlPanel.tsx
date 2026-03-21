@@ -73,7 +73,7 @@ export function ControlPanel() {
           </div>
           <StatusBadge
             lastSeen={client.last_seen}
-            gracePeriodMs={client.config.grace_period_s * 1000}
+            pingIntervalMs={client.config.ping_interval_s * 1000}
           />
         </div>
       </div>

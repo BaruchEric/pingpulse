@@ -528,7 +528,9 @@ export class ClientMonitor implements DurableObject {
 
   private async updateLastSeen(): Promise<void> {
     const now = Date.now();
-    if (now - this.lastSeenUpdatedAt < 30_000) return;
+    // Throttle to half the ping interval so last_seen stays well within grace_period
+    const throttleMs = Math.max((this.config.ping_interval_s * 1000) / 2, 5_000);
+    if (now - this.lastSeenUpdatedAt < throttleMs) return;
     this.lastSeenUpdatedAt = now;
     await this.env.DB.prepare("UPDATE clients SET last_seen = ? WHERE id = ?")
       .bind(new Date(now).toISOString(), this.clientId)
@@ -654,14 +656,8 @@ export class ClientMonitor implements DurableObject {
           if (key in params) (configUpdates as Record<string, unknown>)[key] = params[key];
         }
 
-        const merged = { ...this.config, ...configUpdates };
-        await this.env.DB.prepare(
-          "UPDATE clients SET config_json = ? WHERE id = ?"
-        )
-          .bind(JSON.stringify(merged), this.clientId)
-          .run();
-
-        this.config = merged;
+        // D1 is already updated by the API handler — just sync in-memory and broadcast
+        this.config = { ...this.config, ...configUpdates };
         this.broadcast({ type: "config_update", config: this.config });
         return Response.json({ ok: true, config: this.config });
       }

@@ -27,7 +27,7 @@ export function ClientCard({
         </div>
         <StatusBadge
           lastSeen={client.last_seen}
-          gracePeriodMs={client.config.grace_period_s * 1000}
+          pingIntervalMs={client.config.ping_interval_s * 1000}
           thresholdMs={client.config.alert_latency_threshold_ms}
         />
       </div>

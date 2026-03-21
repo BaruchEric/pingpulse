@@ -146,11 +146,11 @@ clientRoutes.put("/:id", async (c) => {
     const doId = c.env.CLIENT_MONITOR.idFromName(id);
     const stub = c.env.CLIENT_MONITOR.get(doId);
     c.executionCtx.waitUntil(
-      stub.fetch(new Request("http://do/command", {
+      stub.fetch(new Request("http://internal/command", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: "update_config", params: mergedConfig }),
-      })).catch(() => {})
+      })).catch((err) => console.error("[clients] DO update_config failed", { id, err }))
     );
   }
 
@@ -165,7 +165,7 @@ clientRoutes.delete("/:id", async (c) => {
   try {
     const doId = c.env.CLIENT_MONITOR.idFromName(id);
     const stub = c.env.CLIENT_MONITOR.get(doId);
-    await stub.fetch(new Request("http://do/command", {
+    await stub.fetch(new Request("http://internal/command", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ command: "deregister" }),
