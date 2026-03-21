@@ -370,15 +370,16 @@ export class ClientMonitor implements DurableObject {
     }
   }
 
-  private async handleSessionDrop(_ws: WebSocket): Promise<void> {
-    if (this.sessions.length === 0) {
+  private async handleSessionDrop(closingWs: WebSocket): Promise<void> {
+    // The closing WS may still be in getWebSockets() at this point
+    const remaining = this.sessions.filter(s => s !== closingWs);
+    if (remaining.length === 0) {
       const now = Date.now();
       this.disconnectedAt = now;
       await this.state.storage.put("disconnectedAt", now);
       await this.ensureConfigLoaded();
-      await this.state.storage.setAlarm(
-        now + this.config.grace_period_s * 1000
-      );
+      const grace = (this.config.down_alert_grace_seconds ?? this.config.grace_period_s) * 1000;
+      await this.state.storage.setAlarm(now + grace);
     }
   }
 
