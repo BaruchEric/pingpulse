@@ -38,7 +38,15 @@ function usePolling<T>(
     refresh();
     if (intervalMs <= 0) return;
     const id = setInterval(refresh, intervalMs);
-    return () => clearInterval(id);
+    // Immediately refresh when tab becomes visible again
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refresh, intervalMs, ...deps]);
 

@@ -99,17 +99,29 @@ export function ClientDetail() {
 
       {/* Summary stats */}
       {metrics && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-4">
           {[
-            ["Avg RTT", `${metrics.summary.avg_rtt_ms.toFixed(1)}ms`],
-            ["P95 RTT", `${metrics.summary.p95_rtt_ms.toFixed(1)}ms`],
-            ["Packet Loss", `${metrics.summary.loss_pct.toFixed(1)}%`],
-            ["Pings", `${metrics.summary.ok_pings}/${metrics.summary.total_pings}`],
-            ["Outages", `${metrics.outages.length}`],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-center">
-              <div className="text-lg font-bold font-mono">{value}</div>
-              <div className="text-xs text-zinc-500">{label}</div>
+            { label: "Avg RTT", value: `${metrics.summary.avg_rtt_ms.toFixed(1)}ms` },
+            { label: "P95 RTT", value: `${metrics.summary.p95_rtt_ms.toFixed(1)}ms` },
+            { label: "Packet Loss", value: `${metrics.summary.loss_pct.toFixed(1)}%` },
+            { label: "Pings", value: `${metrics.summary.ok_pings}/${metrics.summary.total_pings}` },
+            {
+              label: "Timeouts",
+              value: `${metrics.summary.timeout_pings}`,
+              highlight: metrics.summary.timeout_pings > 0,
+            },
+            { label: "Outages", value: `${metrics.outages.length}` },
+          ].map(({ label, value, highlight }) => (
+            <div
+              key={label}
+              className={`rounded-lg border p-3 text-center ${
+                highlight
+                  ? "border-red-700 bg-red-950/30"
+                  : "border-zinc-800 bg-zinc-900/50"
+              }`}
+            >
+              <div className={`text-lg font-bold font-mono ${highlight ? "text-red-400" : ""}`}>{value}</div>
+              <div className={`text-xs ${highlight ? "font-semibold text-red-400/70" : "text-zinc-500"}`}>{label}</div>
             </div>
           ))}
         </div>
