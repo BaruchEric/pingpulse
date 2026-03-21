@@ -20,7 +20,10 @@ export function ClientCard({
       <div className="flex items-start justify-between">
         <div>
           <h3 className="font-medium">{client.name}</h3>
-          <p className="text-xs text-zinc-500">{client.location}</p>
+          <p className="text-xs text-zinc-500">
+            {client.location}
+            {client.client_version && <span className="ml-2 text-zinc-600">v{client.client_version}</span>}
+          </p>
         </div>
         <StatusBadge
           lastSeen={client.last_seen}

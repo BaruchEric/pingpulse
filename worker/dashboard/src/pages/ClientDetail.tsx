@@ -70,7 +70,10 @@ export function ClientDetail() {
           <Link to="/" className="text-zinc-500 hover:text-zinc-300">&larr;</Link>
           <div>
             <h1 className="text-xl font-semibold">{client.name}</h1>
-            <p className="text-sm text-zinc-500">{client.location}</p>
+            <p className="text-sm text-zinc-500">
+              {client.location}
+              {client.client_version && <span className="ml-2 text-zinc-600">v{client.client_version}</span>}
+            </p>
           </div>
           <StatusBadge
             lastSeen={client.last_seen}

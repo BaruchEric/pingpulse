@@ -22,6 +22,7 @@ export interface Client {
   id: string;
   name: string;
   location: string;
+  client_version: string;
   config: ClientConfig;
   created_at: string;
   last_seen: string;
