@@ -8,6 +8,7 @@ mod logger;
 mod messages;
 mod service;
 mod speed_test;
+mod store;
 mod websocket;
 
 use clap::{Parser, Subcommand};
