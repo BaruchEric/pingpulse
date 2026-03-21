@@ -103,6 +103,14 @@ export function useClientStatus(id: string) {
   return usePolling(() => api.getClientStatus(id), 5_000, [id]);
 }
 
+export function useLogs(clientId: string, page: number, perPage = 50) {
+  return usePolling(
+    () => api.getLogs(clientId, perPage, page * perPage),
+    0,
+    [clientId, page, perPage]
+  );
+}
+
 export function useAuth() {
   const [authed, setAuthed] = useState<boolean | null>(null);
 

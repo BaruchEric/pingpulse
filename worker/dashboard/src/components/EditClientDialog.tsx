@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import type { Client } from "@/lib/types";
+import { SectionHeader } from "@/components/SectionHeader";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 focus:border-[var(--color-accent)] focus:outline-none";
@@ -116,13 +117,21 @@ export function EditClientDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <form
         onSubmit={handleSubmit}
-        className="max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
+        className="relative max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
       >
-        <h2 className="text-lg font-semibold">Edit Client</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Edit Client</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
 
         {/* Basic info */}
         <div>
@@ -133,99 +142,106 @@ export function EditClientDialog({
           <label className={labelCls}>Location</label>
           <input value={location} onChange={(e) => setLocation(e.target.value)} className={inputCls} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Ping Interval (s)</label>
-            <input type="number" min="5" value={pingInterval} onChange={(e) => setPingInterval(e.target.value)} className={inputMonoCls} />
-          </div>
-          <div>
-            <label className={labelCls}>Speed Test Interval (s)</label>
-            <input type="number" min="60" value={speedTestInterval} onChange={(e) => setSpeedTestInterval(e.target.value)} className={inputMonoCls} />
-          </div>
-          <div>
-            <label className={labelCls}>Latency Threshold (ms)</label>
-            <input type="number" value={latencyThreshold} onChange={(e) => setLatencyThreshold(e.target.value)} className={inputMonoCls} />
-          </div>
-          <div>
-            <label className={labelCls}>Loss Threshold (%)</label>
-            <input type="number" value={lossThreshold} onChange={(e) => setLossThreshold(e.target.value)} className={inputMonoCls} />
-          </div>
-        </div>
-        <Toggle checked={notificationsEnabled} onChange={setNotificationsEnabled} label="Send notifications (Email & Telegram)" />
 
-        {/* Probe Config */}
-        <fieldset className="space-y-3 rounded-lg border border-zinc-800 p-4">
-          <legend className="px-2 text-xs font-medium text-zinc-400">Probe Config</legend>
+        <div className="space-y-4">
+          <SectionHeader color="green" label="Client Config" description="pushed to agent" />
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>ICMP Interval (s)</label>
-              <input type="number" min="5" value={icmpInterval} onChange={(e) => setIcmpInterval(e.target.value)} className={inputMonoCls} />
+              <label className={labelCls}>Ping Interval (s)</label>
+              <input type="number" min="5" value={pingInterval} onChange={(e) => setPingInterval(e.target.value)} className={inputMonoCls} />
             </div>
             <div>
-              <label className={labelCls}>HTTP Interval (s)</label>
-              <input type="number" min="5" value={httpInterval} onChange={(e) => setHttpInterval(e.target.value)} className={inputMonoCls} />
+              <label className={labelCls}>Speed Test Interval (s)</label>
+              <input type="number" min="60" value={speedTestInterval} onChange={(e) => setSpeedTestInterval(e.target.value)} className={inputMonoCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Latency Threshold (ms)</label>
+              <input type="number" value={latencyThreshold} onChange={(e) => setLatencyThreshold(e.target.value)} className={inputMonoCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Loss Threshold (%)</label>
+              <input type="number" value={lossThreshold} onChange={(e) => setLossThreshold(e.target.value)} className={inputMonoCls} />
             </div>
           </div>
-          <div>
-            <label className={labelCls}>ICMP Targets (comma-separated)</label>
-            <input value={icmpTargets} onChange={(e) => setIcmpTargets(e.target.value)} placeholder="8.8.8.8, 1.1.1.1" className={inputCls} />
-          </div>
-          <div>
-            <label className={labelCls}>HTTP Targets (comma-separated)</label>
-            <input value={httpTargets} onChange={(e) => setHttpTargets(e.target.value)} placeholder="https://example.com" className={inputCls} />
-          </div>
-        </fieldset>
 
-        {/* Down Alerts */}
-        <fieldset className="space-y-3 rounded-lg border border-zinc-800 p-4">
-          <legend className="px-2 text-xs font-medium text-zinc-400">Down Alerts</legend>
-          <div>
-            <label className={labelCls}>Grace Period (s)</label>
-            <input type="number" min="30" value={gracePeriod} onChange={(e) => setGracePeriod(e.target.value)} className={inputMonoCls} />
-          </div>
-          <div className="space-y-2">
-            <span className={labelCls}>Alert Channels</span>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm text-zinc-400">
-                <input type="checkbox" checked={alertTelegram} onChange={(e) => setAlertTelegram(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
-                Telegram
-              </label>
-              <label className="flex items-center gap-2 text-sm text-zinc-400">
-                <input type="checkbox" checked={alertEmail} onChange={(e) => setAlertEmail(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
-                Email
-              </label>
-            </div>
-          </div>
-          <Toggle checked={escalationEnabled} onChange={setEscalationEnabled} label="Enable escalation" />
-          {escalationEnabled && (
-            <div className="space-y-3 pl-4 border-l-2 border-zinc-700">
+          <fieldset className="space-y-3 rounded-lg border border-zinc-800 p-4">
+            <legend className="px-2 text-xs font-medium text-zinc-400">Probe Config</legend>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Escalation Delay (s)</label>
-                <input type="number" min="60" value={escalationDelay} onChange={(e) => setEscalationDelay(e.target.value)} className={inputMonoCls} />
+                <label className={labelCls}>ICMP Interval (s)</label>
+                <input type="number" min="5" value={icmpInterval} onChange={(e) => setIcmpInterval(e.target.value)} className={inputMonoCls} />
               </div>
+              <div>
+                <label className={labelCls}>HTTP Interval (s)</label>
+                <input type="number" min="5" value={httpInterval} onChange={(e) => setHttpInterval(e.target.value)} className={inputMonoCls} />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>ICMP Targets (comma-separated)</label>
+              <input value={icmpTargets} onChange={(e) => setIcmpTargets(e.target.value)} placeholder="8.8.8.8, 1.1.1.1" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>HTTP Targets (comma-separated)</label>
+              <input value={httpTargets} onChange={(e) => setHttpTargets(e.target.value)} placeholder="https://example.com" className={inputCls} />
+            </div>
+          </fieldset>
+        </div>
+
+        <div className="space-y-4">
+          <SectionHeader color="blue" label="Server Config" description="worker-side only" />
+
+          <Toggle checked={notificationsEnabled} onChange={setNotificationsEnabled} label="Send notifications (Email & Telegram)" />
+
+          <fieldset className="space-y-3 rounded-lg border border-zinc-800 p-4">
+            <legend className="px-2 text-xs font-medium text-zinc-400">Down Alerts</legend>
+            <div>
+              <label className={labelCls}>Grace Period (s)</label>
+              <input type="number" min="30" value={gracePeriod} onChange={(e) => setGracePeriod(e.target.value)} className={inputMonoCls} />
+            </div>
+            <div className="space-y-2">
+              <span className={labelCls}>Alert Channels</span>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 text-sm text-zinc-400">
-                  <input type="checkbox" checked={escalationTelegram} onChange={(e) => setEscalationTelegram(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
+                  <input type="checkbox" checked={alertTelegram} onChange={(e) => setAlertTelegram(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
                   Telegram
                 </label>
                 <label className="flex items-center gap-2 text-sm text-zinc-400">
-                  <input type="checkbox" checked={escalationEmail} onChange={(e) => setEscalationEmail(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
+                  <input type="checkbox" checked={alertEmail} onChange={(e) => setAlertEmail(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
                   Email
                 </label>
               </div>
             </div>
-          )}
-        </fieldset>
+            <Toggle checked={escalationEnabled} onChange={setEscalationEnabled} label="Enable escalation" />
+            {escalationEnabled && (
+              <div className="space-y-3 pl-4 border-l-2 border-zinc-700">
+                <div>
+                  <label className={labelCls}>Escalation Delay (s)</label>
+                  <input type="number" min="60" value={escalationDelay} onChange={(e) => setEscalationDelay(e.target.value)} className={inputMonoCls} />
+                </div>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm text-zinc-400">
+                    <input type="checkbox" checked={escalationTelegram} onChange={(e) => setEscalationTelegram(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
+                    Telegram
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-zinc-400">
+                    <input type="checkbox" checked={escalationEmail} onChange={(e) => setEscalationEmail(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
+                    Email
+                  </label>
+                </div>
+              </div>
+            )}
+          </fieldset>
 
-        {/* Retention */}
-        <fieldset className="space-y-3 rounded-lg border border-zinc-800 p-4">
-          <legend className="px-2 text-xs font-medium text-zinc-400">Retention</legend>
-          <div>
-            <label className={labelCls}>Raw Data Retention (days)</label>
-            <input type="number" min="1" value={retentionDays} onChange={(e) => setRetentionDays(e.target.value)} className={inputMonoCls} />
-          </div>
-          <Toggle checked={archiveToR2} onChange={setArchiveToR2} label="Archive to R2 before deletion" />
-        </fieldset>
+          <fieldset className="space-y-3 rounded-lg border border-zinc-800 p-4">
+            <legend className="px-2 text-xs font-medium text-zinc-400">Retention</legend>
+            <div>
+              <label className={labelCls}>Raw Data Retention (days)</label>
+              <input type="number" min="1" value={retentionDays} onChange={(e) => setRetentionDays(e.target.value)} className={inputMonoCls} />
+            </div>
+            <Toggle checked={archiveToR2} onChange={setArchiveToR2} label="Archive to R2 before deletion" />
+          </fieldset>
+        </div>
 
         <div className="flex gap-2 pt-2">
           <button type="submit" disabled={saving}

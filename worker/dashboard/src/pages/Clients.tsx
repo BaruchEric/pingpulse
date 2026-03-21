@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { useClients } from "@/lib/hooks";
 import { api } from "@/lib/api";
@@ -9,9 +9,17 @@ import { EditClientDialog } from "@/components/EditClientDialog";
 import { LocalClientPanel } from "@/components/LocalClientPanel";
 
 export function Clients() {
-  const { data, refresh } = useClients(10_000);
+  const { data, refresh } = useClients(3_000);
   const clients = data?.clients ?? null;
   const latestVersion = data?.latest_client_version ?? "";
+  const pingedRef = useRef(false);
+
+  useEffect(() => {
+    if (!clients || pingedRef.current) return;
+    pingedRef.current = true;
+    clients.forEach((c) => api.sendCommand(c.id, "request_ping").catch(() => {}));
+  }, [clients]);
+
   const [showRegister, setShowRegister] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);

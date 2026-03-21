@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router";
 import { api } from "@/lib/api";
 import { useClient, useClientStatus } from "@/lib/hooks";
 import { StatusBadge } from "@/components/StatusBadge";
+import { SectionHeader } from "@/components/SectionHeader";
 
 const INPUT_CLASS = "w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm font-mono text-zinc-100 focus:border-[var(--color-accent)] focus:outline-none";
 
@@ -206,12 +207,23 @@ export function ControlPanel() {
           </p>
         </div>
 
-        {/* Config */}
         <div className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/50 p-5">
-          <h2 className="text-sm font-medium text-zinc-400">Live Config Push</h2>
+          <SectionHeader color="green" label="Client Config" description="pushed to agent" />
           <ConfigEditor
             config={client.config}
-            onSave={(config) => runCommand("update_config", config, "Config update")}
+            onSave={async (config) => {
+              setBusy("update_config");
+              try {
+                await api.updateClient(clientId, { config });
+                showToast("Config update pushed");
+                refreshStatus();
+                refreshClient();
+              } catch (e) {
+                showToast(`Failed: ${e instanceof Error ? e.message : "unknown"}`);
+              } finally {
+                setBusy(null);
+              }
+            }}
             busy={busy !== null}
           />
           <p className="text-xs text-zinc-600">

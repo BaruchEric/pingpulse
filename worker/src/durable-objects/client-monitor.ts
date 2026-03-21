@@ -279,6 +279,8 @@ export class ClientMonitor implements DurableObject {
   }
 
   async alarm(): Promise<void> {
+    await this.ensureConfigLoaded();
+
     // Check if this is a disconnection grace period check
     if (this.disconnectedAt && this.sessions.length === 0) {
       const gracePeriod = (this.config.down_alert_grace_seconds ?? this.config.grace_period_s) * 1000;
@@ -622,6 +624,15 @@ export class ClientMonitor implements DurableObject {
       case "simulate_reset":
         this.simulation = { latency_ms: 0, loss_pct: 0 };
         return Response.json({ ok: true, simulation: this.simulation });
+
+      case "request_ping": {
+        if (this.sessions.length === 0) {
+          return Response.json({ ok: false, reason: "not_connected" });
+        }
+        await this.sendPing();
+        await Promise.all([this.flushBuffer(), this.updateLastSeen()]);
+        return Response.json({ ok: true });
+      }
 
       case "disconnect": {
         this.closeAllSessions("Admin disconnect");

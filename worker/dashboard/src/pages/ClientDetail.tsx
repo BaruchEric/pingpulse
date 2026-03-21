@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router";
-import { useClient, useMetrics, useAlerts, getTimeRange, type TimeRange } from "@/lib/hooks";
+import { useClient, useMetrics, useAlerts, useLogs, getTimeRange, type TimeRange } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SyncStatusBadge } from "@/components/SyncStatusBadge";
@@ -11,6 +11,7 @@ import { WanQualityChart } from "@/components/WanQualityChart";
 import { ConnectionStateChart } from "@/components/ConnectionStateChart";
 import { OutageTimeline } from "@/components/OutageTimeline";
 import { AlertRow } from "@/components/AlertRow";
+import { LogsChart } from "@/components/LogsChart";
 
 export function ClientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +24,13 @@ export function ClientDetail() {
   const { data: client, loading: clientLoading } = useClient(clientId);
   const { data: metrics, loading: metricsLoading, refresh: refreshMetrics } = useMetrics(clientId, range);
   const { data: alerts } = useAlerts(id, 10);
+
+  // Ping logs
+  const LOGS_PER_PAGE = 50;
+  const [logsPage, setLogsPage] = useState(0);
+  const { data: logsData, loading: logsLoading } = useLogs(clientId, logsPage, LOGS_PER_PAGE);
+  const logs = logsData?.logs ?? [];
+  const logsTotal = logsData?.total ?? 0;
 
   const stopPolling = () => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -213,6 +221,80 @@ export function ClientDetail() {
           </div>
         </div>
       )}
+
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-zinc-400">Server Logs</h2>
+          <span className="text-xs text-zinc-500">{logsTotal.toLocaleString()} total</span>
+        </div>
+        <LogsChart logs={logs} />
+        {logsLoading && logs.length === 0 ? (
+          <div className="flex h-32 items-center justify-center text-sm text-zinc-500">Loading...</div>
+        ) : logs.length === 0 ? (
+          <div className="flex h-32 items-center justify-center text-sm text-zinc-500">No logs</div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px]">
+                <thead className="bg-zinc-900/80">
+                  <tr>
+                    {["Timestamp", "Direction", "Status", "RTT (ms)", "Jitter (ms)"].map((h) => (
+                      <th key={h} className="px-3 py-2 text-left text-xs text-zinc-500 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {logs.map((log, i) => (
+                    <tr key={i} className="hover:bg-zinc-800/30">
+                      <td className="px-3 py-1.5 text-sm text-zinc-300 font-mono">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-1.5 text-sm text-zinc-400">
+                        {log.direction === "cf_to_client" ? "CF → Client" : "Client → CF"}
+                      </td>
+                      <td className="px-3 py-1.5 text-sm">
+                        <span className={
+                          log.status === "ok" ? "text-emerald-400" :
+                          log.status === "timeout" ? "text-amber-400" : "text-red-400"
+                        }>
+                          {log.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1.5 text-sm text-zinc-300 font-mono">
+                        {log.status === "ok" ? log.rtt_ms.toFixed(1) : "—"}
+                      </td>
+                      <td className="px-3 py-1.5 text-sm text-zinc-300 font-mono">
+                        {log.status === "ok" ? log.jitter_ms.toFixed(1) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {logsTotal > LOGS_PER_PAGE && (
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  onClick={() => setLogsPage((p) => Math.max(0, p - 1))}
+                  disabled={logsPage === 0}
+                  className="rounded px-3 py-1 text-xs font-medium bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                <span className="text-xs text-zinc-500">
+                  Page {logsPage + 1} of {Math.ceil(logsTotal / LOGS_PER_PAGE)}
+                </span>
+                <button
+                  onClick={() => setLogsPage((p) => p + 1)}
+                  disabled={(logsPage + 1) * LOGS_PER_PAGE >= logsTotal}
+                  className="rounded px-3 py-1 text-xs font-medium bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
