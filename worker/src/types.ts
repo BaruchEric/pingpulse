@@ -1,3 +1,24 @@
+export interface ProbeRecord {
+  seq_id: number;
+  probe_type: "icmp" | "http";
+  target: string;
+  timestamp: number;
+  rtt_ms: number | null;
+  status_code: number | null;
+  status: "ok" | "timeout" | "error";
+  jitter_ms: number | null;
+}
+
+export interface SyncBatch {
+  session_id: string;
+  records: ProbeRecord[];
+}
+
+export interface SyncResponse {
+  acked_seq: number;
+  throttle_ms?: number;
+}
+
 export interface ClientConfig {
   ping_interval_s: number;
   speed_test_interval_s: number;
@@ -8,6 +29,26 @@ export interface ClientConfig {
   alert_loss_threshold_pct: number;
   grace_period_s: number;
   notifications_enabled: boolean;
+
+  // Probe config (pushed to client)
+  probe_icmp_interval_s?: number;
+  probe_icmp_targets?: string[];
+  probe_icmp_timeout_ms?: number;
+  probe_http_interval_s?: number;
+  probe_http_targets?: string[];
+  probe_http_timeout_ms?: number;
+
+  // Retention policy
+  retention_raw_days: number;
+  retention_aggregated_days: number;
+  retention_archive_to_r2: boolean;
+
+  // Down alert config
+  down_alert_grace_seconds: number;
+  down_alert_channels: string[];
+  down_alert_escalation_enabled: boolean;
+  down_alert_escalate_after_seconds: number;
+  down_alert_escalate_channels: string[];
 }
 
 export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
@@ -20,6 +61,14 @@ export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   alert_loss_threshold_pct: 5,
   grace_period_s: 60,
   notifications_enabled: true,
+  retention_raw_days: 30,
+  retention_aggregated_days: 90,
+  retention_archive_to_r2: true,
+  down_alert_grace_seconds: 60,
+  down_alert_channels: ["telegram"],
+  down_alert_escalation_enabled: false,
+  down_alert_escalate_after_seconds: 600,
+  down_alert_escalate_channels: ["email"],
 };
 
 export interface PingResult {
@@ -93,4 +142,5 @@ export type WSMessage =
   | { type: "error"; message: string }
   | { type: "deregistered"; reason: string }
   | { type: "server_logs"; entries: ServerLogEntry[] }
-  | { type: "update_available"; latest_version: string; download_url: string };
+  | { type: "update_available"; latest_version: string; download_url: string }
+  | { type: "probe_result"; session_id: string; record: ProbeRecord };
