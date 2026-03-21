@@ -20,6 +20,42 @@ export interface Env {
 
 const app = createRouter();
 
+async function applyPerClientRetention(env: Env): Promise<void> {
+  const allClients = await env.DB.prepare(
+    "SELECT id, config_json FROM clients"
+  ).all<{ id: string; config_json: string }>();
+
+  for (const client of allClients.results ?? []) {
+    const config = JSON.parse(client.config_json || "{}");
+    const rawDays = config.retention_raw_days ?? 30;
+    const archiveToR2 = config.retention_archive_to_r2 ?? true;
+    const cutoff = Date.now() - rawDays * 24 * 60 * 60 * 1000;
+
+    if (archiveToR2) {
+      const oldProbes = await env.DB.prepare(
+        "SELECT * FROM client_probe_results WHERE client_id = ? AND timestamp < ?"
+      ).bind(client.id, cutoff).all();
+
+      if ((oldProbes.results?.length ?? 0) > 0) {
+        const headers = Object.keys(oldProbes.results![0]);
+        const csv = [headers.join(","), ...oldProbes.results!.map(row =>
+          headers.map(h => JSON.stringify((row as Record<string, unknown>)[h] ?? "")).join(",")
+        )].join("\n");
+        const key = `archive/${client.id}/probes/${new Date().toISOString().slice(0, 10)}.csv`;
+        await env.ARCHIVE.put(key, csv);
+      }
+    }
+
+    await env.DB.prepare(
+      "DELETE FROM client_probe_results WHERE client_id = ? AND timestamp < ?"
+    ).bind(client.id, cutoff).run();
+
+    await env.DB.prepare(
+      "DELETE FROM ping_results WHERE client_id = ? AND timestamp < ?"
+    ).bind(client.id, cutoff).run();
+  }
+}
+
 export default {
   async fetch(
     request: Request,
@@ -49,8 +85,8 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<void> {
-    // Only fan out to recently active clients
-    const { results: clients } = await env.DB.prepare(
+    // Only fan out to recently active clients for speed tests
+    const { results: activeClients } = await env.DB.prepare(
       "SELECT id FROM clients WHERE last_seen > ?"
     )
       .bind(new Date(Date.now() - 86400_000).toISOString())
@@ -60,7 +96,7 @@ export default {
     ctx.waitUntil(
       Promise.all([
         Promise.allSettled(
-          clients.map((client) => {
+          activeClients.map((client) => {
             const doId = env.CLIENT_MONITOR.idFromName(client.id as string);
             const stub = env.CLIENT_MONITOR.get(doId);
             return stub.fetch("http://internal/trigger-speed-test", {
@@ -74,6 +110,8 @@ export default {
         )
           .bind(new Date(Date.now() - 3600_000).toISOString())
           .run(),
+        // Per-client retention policy
+        applyPerClientRetention(env),
       ])
     );
   },
