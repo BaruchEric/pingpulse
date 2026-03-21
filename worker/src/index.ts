@@ -37,8 +37,10 @@ async function applyPerClientRetention(env: Env): Promise<void> {
       ).bind(client.id, cutoff).all();
 
       if ((oldProbes.results?.length ?? 0) > 0) {
-        const headers = Object.keys(oldProbes.results![0]);
-        const csv = [headers.join(","), ...oldProbes.results!.map(row =>
+        const results = oldProbes.results ?? [];
+        const firstRow = results[0];
+        const headers = Object.keys(firstRow ?? {});
+        const csv = [headers.join(","), ...results.map(row =>
           headers.map(h => JSON.stringify((row as Record<string, unknown>)[h] ?? "")).join(",")
         )].join("\n");
         const key = `archive/${client.id}/probes/${new Date().toISOString().slice(0, 10)}.csv`;

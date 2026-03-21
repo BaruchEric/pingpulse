@@ -44,13 +44,13 @@ clientRoutes.get("/", async (c) => {
   type SpeedTestRow = { client_id: string; download_mbps: number; upload_mbps: number; timestamp: string };
 
   const pingStatsMap = new Map<string, PingStatRow>(
-    (pingStatsResult.results as PingStatRow[]).map((r) => [r.client_id, r])
+    ((pingStatsResult?.results ?? []) as PingStatRow[]).map((r) => [r.client_id, r])
   );
   const speedTestMap = new Map<string, SpeedTestRow>(
-    (speedTestResult.results as SpeedTestRow[]).map((r) => [r.client_id, r])
+    ((speedTestResult?.results ?? []) as SpeedTestRow[]).map((r) => [r.client_id, r])
   );
 
-  const clients = (clientsResult.results as Record<string, unknown>[]).map((r) => {
+  const clients = ((clientsResult?.results ?? []) as Record<string, unknown>[]).map((r) => {
     const clientId = r.id as string;
     const pingStat = pingStatsMap.get(clientId);
     const speedTest = speedTestMap.get(clientId);
@@ -122,13 +122,14 @@ clientRoutes.put("/:id", async (c) => {
     updates.push("location = ?");
     values.push(body.location);
   }
+  let mergedConfig: Record<string, unknown> | undefined;
   if (body.config !== undefined) {
-    const merged = {
+    mergedConfig = {
       ...JSON.parse(existing.config_json as string),
       ...body.config,
     };
     updates.push("config_json = ?");
-    values.push(JSON.stringify(merged));
+    values.push(JSON.stringify(mergedConfig));
   }
 
   if (updates.length === 0)
@@ -140,6 +141,18 @@ clientRoutes.put("/:id", async (c) => {
   )
     .bind(...values)
     .run();
+
+  if (mergedConfig) {
+    const doId = c.env.CLIENT_MONITOR.idFromName(id);
+    const stub = c.env.CLIENT_MONITOR.get(doId);
+    c.executionCtx.waitUntil(
+      stub.fetch(new Request("http://do/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "update_config", params: mergedConfig }),
+      })).catch(() => {})
+    );
+  }
 
   return c.json({ ok: true });
 });

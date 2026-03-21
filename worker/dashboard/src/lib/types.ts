@@ -8,6 +8,26 @@ export interface ClientConfig {
   alert_loss_threshold_pct: number;
   grace_period_s: number;
   notifications_enabled: boolean;
+
+  // Probe config
+  probe_icmp_interval_s?: number;
+  probe_icmp_targets?: string[];
+  probe_icmp_timeout_ms?: number;
+  probe_http_interval_s?: number;
+  probe_http_targets?: string[];
+  probe_http_timeout_ms?: number;
+
+  // Retention
+  retention_raw_days: number;
+  retention_aggregated_days: number;
+  retention_archive_to_r2: boolean;
+
+  // Down alert config
+  down_alert_grace_seconds: number;
+  down_alert_channels: string[];
+  down_alert_escalation_enabled: boolean;
+  down_alert_escalate_after_seconds: number;
+  down_alert_escalate_channels: string[];
 }
 
 export interface ClientStats {

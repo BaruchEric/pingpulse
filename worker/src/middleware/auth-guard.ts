@@ -28,7 +28,7 @@ export async function authGuard(c: Context<AppEnv>, next: Next) {
       ["verify"]
     );
 
-    const [headerB64, payloadB64, signatureB64] = token.split(".");
+    const [headerB64, payloadB64, signatureB64] = token.split(".") as [string, string, string];
     const data = encoder.encode(`${headerB64}.${payloadB64}`);
     const signature = Uint8Array.from(
       atob(signatureB64.replace(/-/g, "+").replace(/_/g, "/")),

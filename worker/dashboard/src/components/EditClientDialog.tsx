@@ -47,44 +47,30 @@ export function EditClientDialog({
   const [lossThreshold, setLossThreshold] = useState(String(client.config.alert_loss_threshold_pct));
   const [notificationsEnabled, setNotificationsEnabled] = useState(client.config.notifications_enabled ?? true);
 
-  // Probe config
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cfg = client.config as any;
-  const [icmpInterval, setIcmpInterval] = useState(String(cfg.icmp_interval_s ?? 30));
+  const cfg = client.config;
+  const [icmpInterval, setIcmpInterval] = useState(String(cfg.probe_icmp_interval_s ?? 30));
   const [icmpTargets, setIcmpTargets] = useState(
-    Array.isArray(cfg.icmp_targets) ? (cfg.icmp_targets as string[]).join(", ") : "8.8.8.8, 1.1.1.1"
+    cfg.probe_icmp_targets?.join(", ") ?? "8.8.8.8, 1.1.1.1"
   );
-  const [httpInterval, setHttpInterval] = useState(String(cfg.http_interval_s ?? 60));
+  const [httpInterval, setHttpInterval] = useState(String(cfg.probe_http_interval_s ?? 60));
   const [httpTargets, setHttpTargets] = useState(
-    Array.isArray(cfg.http_targets) ? (cfg.http_targets as string[]).join(", ") : ""
+    cfg.probe_http_targets?.join(", ") ?? ""
   );
 
-  // Down alert config
-  const [gracePeriod, setGracePeriod] = useState(String(client.config.grace_period_s));
-  const [alertTelegram, setAlertTelegram] = useState(
-    cfg.alert_channels_telegram !== false
-  );
-  const [alertEmail, setAlertEmail] = useState(
-    (cfg.alert_channels_email as boolean | undefined) ?? false
-  );
-  const [escalationEnabled, setEscalationEnabled] = useState(
-    (cfg.escalation_enabled as boolean | undefined) ?? false
-  );
+  const downChannels = cfg.down_alert_channels ?? ["telegram"];
+  const [gracePeriod, setGracePeriod] = useState(String(cfg.down_alert_grace_seconds ?? cfg.grace_period_s));
+  const [alertTelegram, setAlertTelegram] = useState(downChannels.includes("telegram"));
+  const [alertEmail, setAlertEmail] = useState(downChannels.includes("email"));
+  const [escalationEnabled, setEscalationEnabled] = useState(cfg.down_alert_escalation_enabled ?? false);
   const [escalationDelay, setEscalationDelay] = useState(
-    String(cfg.escalation_delay_s ?? 300)
+    String(cfg.down_alert_escalate_after_seconds ?? 600)
   );
-  const [escalationTelegram, setEscalationTelegram] = useState(
-    (cfg.escalation_telegram as boolean | undefined) ?? true
-  );
-  const [escalationEmail, setEscalationEmail] = useState(
-    (cfg.escalation_email as boolean | undefined) ?? false
-  );
+  const escalateChannels = cfg.down_alert_escalate_channels ?? ["email"];
+  const [escalationTelegram, setEscalationTelegram] = useState(escalateChannels.includes("telegram"));
+  const [escalationEmail, setEscalationEmail] = useState(escalateChannels.includes("email"));
 
-  // Retention config
-  const [retentionDays, setRetentionDays] = useState(String(cfg.retention_days ?? 90));
-  const [archiveToR2, setArchiveToR2] = useState(
-    (cfg.archive_to_r2 as boolean | undefined) ?? false
-  );
+  const [retentionDays, setRetentionDays] = useState(String(cfg.retention_raw_days ?? 30));
+  const [archiveToR2, setArchiveToR2] = useState(cfg.retention_archive_to_r2 ?? true);
 
   const [saving, setSaving] = useState(false);
 
@@ -104,22 +90,23 @@ export function EditClientDialog({
           alert_latency_threshold_ms: parseFloat(latencyThreshold),
           alert_loss_threshold_pct: parseFloat(lossThreshold),
           notifications_enabled: notificationsEnabled,
-          // Probe config
-          icmp_interval_s: parseInt(icmpInterval),
-          icmp_targets: parseTargets(icmpTargets),
-          http_interval_s: parseInt(httpInterval),
-          http_targets: parseTargets(httpTargets),
-          // Down alert config
-          grace_period_s: parseInt(gracePeriod),
-          alert_channels_telegram: alertTelegram,
-          alert_channels_email: alertEmail,
-          escalation_enabled: escalationEnabled,
-          escalation_delay_s: parseInt(escalationDelay),
-          escalation_telegram: escalationTelegram,
-          escalation_email: escalationEmail,
-          // Retention
-          retention_days: parseInt(retentionDays),
-          archive_to_r2: archiveToR2,
+          probe_icmp_interval_s: parseInt(icmpInterval),
+          probe_icmp_targets: parseTargets(icmpTargets),
+          probe_http_interval_s: parseInt(httpInterval),
+          probe_http_targets: parseTargets(httpTargets),
+          down_alert_grace_seconds: parseInt(gracePeriod),
+          down_alert_channels: [
+            ...(alertTelegram ? ["telegram"] : []),
+            ...(alertEmail ? ["email"] : []),
+          ],
+          down_alert_escalation_enabled: escalationEnabled,
+          down_alert_escalate_after_seconds: parseInt(escalationDelay),
+          down_alert_escalate_channels: [
+            ...(escalationTelegram ? ["telegram"] : []),
+            ...(escalationEmail ? ["email"] : []),
+          ],
+          retention_raw_days: parseInt(retentionDays),
+          retention_archive_to_r2: archiveToR2,
         } as Partial<Client["config"]>,
       });
       onClose();

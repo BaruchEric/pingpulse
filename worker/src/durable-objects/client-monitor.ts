@@ -57,7 +57,7 @@ export class ClientMonitor implements DurableObject {
     // Fallback: derive clientId from URL if state.id.name wasn't available
     if (!this.clientId) {
       const match = url.pathname.match(/\/ws\/([^/]+)/);
-      if (match) this.clientId = match[1];
+      if (match && match[1]) this.clientId = match[1];
     }
 
     // Internal API calls from cron/other workers
@@ -105,7 +105,7 @@ export class ClientMonitor implements DurableObject {
 
     // Accept WebSocket
     const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
+    const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
 
     this.state.acceptWebSocket(server, [this.clientId]);
 
@@ -180,7 +180,8 @@ export class ClientMonitor implements DurableObject {
     if (!this.clientId) {
       try {
         const tags = this.state.getTags(ws);
-        if (tags.length > 0) this.clientId = tags[0];
+        const firstTag = tags[0];
+        if (firstTag) this.clientId = firstTag;
       } catch {
         // getTags may not be available in all runtimes
       }
@@ -440,7 +441,7 @@ export class ClientMonitor implements DurableObject {
 
     // RFC 3550 jitter: J(i) = J(i-1) + (|D(i-1,i)| - J(i-1)) / 16
     if (this.recentRTTs.length > 0) {
-      const lastRTT = this.recentRTTs[this.recentRTTs.length - 1];
+      const lastRTT = this.recentRTTs[this.recentRTTs.length - 1] ?? 0;
       const diff = Math.abs(rtt - lastRTT);
       this.runningJitter =
         this.runningJitter + (diff - this.runningJitter) / 16;
@@ -641,6 +642,12 @@ export class ClientMonitor implements DurableObject {
           "full_test_schedule", "full_test_payload_bytes",
           "alert_latency_threshold_ms", "alert_loss_threshold_pct",
           "grace_period_s", "notifications_enabled",
+          "probe_icmp_interval_s", "probe_icmp_targets", "probe_icmp_timeout_ms",
+          "probe_http_interval_s", "probe_http_targets", "probe_http_timeout_ms",
+          "retention_raw_days", "retention_aggregated_days", "retention_archive_to_r2",
+          "down_alert_grace_seconds", "down_alert_channels",
+          "down_alert_escalation_enabled", "down_alert_escalate_after_seconds",
+          "down_alert_escalate_channels",
         ];
         const configUpdates: Partial<ClientConfig> = {};
         for (const key of allowed) {

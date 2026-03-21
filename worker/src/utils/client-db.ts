@@ -11,5 +11,5 @@ export async function deleteClientCascade(db: D1Database, id: string) {
   ]);
 
   const clientDeleteResult = results[results.length - 1];
-  return { deleted: !!clientDeleteResult.meta.changes };
+  return { deleted: !!(clientDeleteResult?.meta.changes) };
 }
