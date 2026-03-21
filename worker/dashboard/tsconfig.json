@@ -5,6 +5,9 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "noEmit": true,
     "paths": { "@/*": ["./src/*"] }

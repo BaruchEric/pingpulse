@@ -32,7 +32,8 @@ speedtestRoutes.post(
   authGuard,
   rateLimit({ maxRequests: 10, windowMs: 60_000, prefix: "speedtest" }),
   async (c) => {
-    const clientId = c.req.param("id")!;
+    const clientId = c.req.param("id");
+    if (!clientId) return c.json({ error: "Missing client ID" }, 400);
 
     const client = await c.env.DB.prepare(
       "SELECT id FROM clients WHERE id = ?"

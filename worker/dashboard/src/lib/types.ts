@@ -1,11 +1,13 @@
 export interface ClientConfig {
   ping_interval_s: number;
+  speed_test_interval_s: number;
   probe_size_bytes: number;
   full_test_schedule: string;
   full_test_payload_bytes: number;
   alert_latency_threshold_ms: number;
   alert_loss_threshold_pct: number;
   grace_period_s: number;
+  notifications_enabled: boolean;
 }
 
 export interface ClientStats {

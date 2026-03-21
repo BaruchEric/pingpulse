@@ -3,13 +3,16 @@ import { useClients } from "@/lib/hooks";
 import { api } from "@/lib/api";
 
 export function Settings() {
-  const { data: clients } = useClients();
+  const { data } = useClients();
+  const clients = data?.clients ?? null;
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordMsg, setPasswordMsg] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
+  const [testingAlert, setTestingAlert] = useState(false);
+  const [testAlertMsg, setTestAlertMsg] = useState("");
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +56,39 @@ export function Settings() {
             {passwordMsg && <span className="text-xs text-zinc-400">{passwordMsg}</span>}
           </div>
         </form>
+      </section>
+
+      {/* Notifications */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-zinc-400">Notifications</h2>
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+          <p className="text-sm text-zinc-400">
+            Alerts are sent via Email (Resend) and Telegram when configured as Worker secrets.
+            Notifications can be toggled per-client in the Edit Client dialog.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={testingAlert}
+              onClick={async () => {
+                setTestingAlert(true);
+                setTestAlertMsg("");
+                try {
+                  await api.testAlert();
+                  setTestAlertMsg("Test alert sent — check your Email/Telegram");
+                } catch {
+                  setTestAlertMsg("Failed to send test alert — check Worker secrets");
+                } finally {
+                  setTestingAlert(false);
+                }
+              }}
+              className="rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            >
+              {testingAlert ? "Sending..." : "Send Test Alert"}
+            </button>
+            {testAlertMsg && <span className="text-xs text-zinc-400">{testAlertMsg}</span>}
+          </div>
+        </div>
       </section>
 
       {/* Data Retention */}

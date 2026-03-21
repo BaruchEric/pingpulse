@@ -36,12 +36,11 @@ impl DailyFileWriter {
 
     /// Delete log files older than `retention_days`.
     pub fn cleanup_old_logs(&self, retention_days: u32) {
-        let cutoff = Local::now() - chrono::Duration::days(retention_days as i64);
+        let cutoff = Local::now() - chrono::Duration::days(i64::from(retention_days));
         let cutoff_str = cutoff.format("%Y-%m-%d").to_string();
 
-        let entries = match fs::read_dir(&self.logs_dir) {
-            Ok(e) => e,
-            Err(_) => return,
+        let Ok(entries) = fs::read_dir(&self.logs_dir) else {
+            return;
         };
 
         for entry in entries.flatten() {
@@ -65,7 +64,7 @@ pub struct DailyFileWriteGuard<'a> {
     writer: &'a DailyFileWriter,
 }
 
-impl<'a> Write for DailyFileWriteGuard<'a> {
+impl Write for DailyFileWriteGuard<'_> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let today = Local::now().format("%Y-%m-%d").to_string();
         let mut state = self.writer.state.lock().unwrap();

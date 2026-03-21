@@ -4,6 +4,7 @@ import type { AlertType, AlertSeverity } from "@/types";
 export interface AlertPayload {
   alert_id: string;
   client_id: string;
+  client_name?: string;
   type: AlertType;
   severity: AlertSeverity;
   value: number;
@@ -20,10 +21,13 @@ const SEVERITY_EMOJI: Record<string, string> = {
 
 function formatMessage(alert: AlertPayload): string {
   const emoji = SEVERITY_EMOJI[alert.severity] || "\u26AA";
+  const clientLabel = alert.client_name
+    ? `${alert.client_name} (${alert.client_id})`
+    : alert.client_id;
   const lines = [
     `${emoji} PingPulse Alert: ${alert.type.toUpperCase().replace(/_/g, " ")}`,
     `Severity: ${alert.severity.toUpperCase()}`,
-    `Client: ${alert.client_id}`,
+    `Client: ${clientLabel}`,
     `Value: ${alert.value}`,
     `Threshold: ${alert.threshold}`,
     `Time: ${alert.timestamp}`,

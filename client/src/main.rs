@@ -36,21 +36,21 @@ enum Commands {
         /// Location label (e.g., "Toronto, CA")
         #[arg(long)]
         location: String,
-        /// Base URL of the PingPulse server (e.g., https://ping.beric.ca)
+        /// Base URL of the `PingPulse` server (e.g., <https://ping.beric.ca>)
         #[arg(long)]
         server: String,
     },
-    /// Start the PingPulse daemon
+    /// Start the `PingPulse` daemon
     Start {
         /// Run in the foreground instead of installing as a service
         #[arg(long)]
         foreground: bool,
     },
-    /// Stop the PingPulse daemon
+    /// Stop the `PingPulse` daemon
     Stop,
     /// Check the daemon status
     Status,
-    /// Completely uninstall PingPulse (stop service, remove binary, config, and Login Item)
+    /// Completely uninstall `PingPulse` (stop service, remove binary, config, and Login Item)
     Uninstall,
     /// Run the local management API server (standalone, for development)
     Agent {
@@ -102,10 +102,7 @@ async fn main() {
             }
         },
         Commands::Uninstall => {
-            if let Err(e) = service::uninstall() {
-                eprintln!("Uninstall failed: {e}");
-                std::process::exit(1);
-            }
+            service::uninstall();
         }
         Commands::Agent { port } => {
             if let Err(e) = agent::run(port, None).await {
@@ -117,6 +114,13 @@ async fn main() {
 }
 
 async fn cmd_register(server: &str, token: &str, name: &str, location: &str) -> anyhow::Result<()> {
+    #[derive(serde::Deserialize)]
+    struct RegisterResponse {
+        client_id: String,
+        client_secret: String,
+        ws_url: String,
+    }
+
     if config::Config::config_path().exists() {
         println!("Existing config found — cleaning up old installation...");
         let _ = service::stop();
@@ -124,7 +128,7 @@ async fn cmd_register(server: &str, token: &str, name: &str, location: &str) -> 
         println!("Old installation removed.");
     }
 
-    println!("Registering with {}...", server);
+    println!("Registering with {server}...");
 
     let client = reqwest::Client::new();
     let resp = client
@@ -145,13 +149,6 @@ async fn cmd_register(server: &str, token: &str, name: &str, location: &str) -> 
                 .and_then(|e| e.as_str())
                 .unwrap_or("unknown error")
         );
-    }
-
-    #[derive(serde::Deserialize)]
-    struct RegisterResponse {
-        client_id: String,
-        client_secret: String,
-        ws_url: String,
     }
 
     let reg: RegisterResponse = resp.json().await?;

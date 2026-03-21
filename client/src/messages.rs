@@ -182,7 +182,7 @@ mod tests {
                 test_type: SpeedTestType::Probe,
                 download_mbps: 95.2,
                 upload_mbps: 42.1,
-                payload_bytes: 262144,
+                payload_bytes: 262_144,
                 duration_ms: 350,
             },
         };

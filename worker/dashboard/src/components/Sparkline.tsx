@@ -17,7 +17,8 @@ export function Sparkline({
     const canvas = canvasRef.current;
     if (!canvas || data.length < 2) return;
 
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -37,7 +38,7 @@ export function Sparkline({
     data.forEach((v, i) => {
       const x = (i / (data.length - 1)) * (width - pad * 2) + pad;
       const y = height - pad - ((v - min) / range) * (height - pad * 2);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      if (i === 0) { ctx.moveTo(x, y); } else { ctx.lineTo(x, y); }
     });
 
     ctx.stroke();

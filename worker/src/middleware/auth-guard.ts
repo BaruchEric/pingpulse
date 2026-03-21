@@ -1,4 +1,4 @@
-import { Context, Next } from "hono";
+import type { Context, Next } from "hono";
 import type { Env } from "@/index";
 import type { JwtPayload } from "@/types";
 

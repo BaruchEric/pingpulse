@@ -29,7 +29,7 @@ pub fn install_and_start(
 ///
 /// On Unix the running binary can be unlinked while executing — the kernel
 /// keeps the inode alive until the process exits, so this is safe.
-pub fn uninstall() -> Result<()> {
+pub fn uninstall() {
     // 1. Stop the service (ignore errors — may not be running)
     let _ = stop();
 
@@ -61,7 +61,6 @@ pub fn uninstall() -> Result<()> {
     reset_btm();
 
     println!("PingPulse has been completely uninstalled.");
-    Ok(())
 }
 
 /// Self-removal for when the daemon wants to uninstall itself.
@@ -110,7 +109,6 @@ fn reset_btm() {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match child.try_wait() {
-            Ok(Some(_)) => return,
             Ok(None) => {
                 if Instant::now() >= deadline {
                     let _ = child.kill();
@@ -118,7 +116,7 @@ fn reset_btm() {
                 }
                 thread::sleep(Duration::from_millis(200));
             }
-            Err(_) => return,
+            Ok(Some(_)) | Err(_) => return,
         }
     }
 }
@@ -126,7 +124,7 @@ fn reset_btm() {
 #[cfg(not(target_os = "macos"))]
 fn reset_btm() {}
 
-/// Remove the PingPulse data directory.
+/// Remove the `PingPulse` data directory.
 pub fn cleanup_data() -> Result<()> {
     cleanup_data_at(&crate::config::Config::config_dir())
 }
@@ -147,7 +145,7 @@ pub fn stop() -> Result<()> {
     {
         let result = stop_launchd();
         reset_btm();
-        return result;
+        result
     }
 
     #[cfg(target_os = "linux")]
@@ -260,12 +258,12 @@ fn install_launchd(binary_path: &str) -> Result<()> {
 /// The plist is removed *before* `launchctl remove` because the remove
 /// command sends SIGTERM to the managed process — which may be us.
 #[cfg(target_os = "macos")]
-fn remove_launchd_service(path: PathBuf, label: &str, description: &str) -> Result<()> {
+fn remove_launchd_service(path: &std::path::Path, label: &str, description: &str) -> Result<()> {
     if !path.exists() {
         bail!("{description} plist not found at {}", path.display());
     }
 
-    std::fs::remove_file(&path)?;
+    std::fs::remove_file(path)?;
 
     let _ = Command::new("launchctl").args(["remove", label]).output();
     println!("PingPulse {description} stopped and removed.");
@@ -277,9 +275,9 @@ fn stop_launchd() -> Result<()> {
     // Clean up legacy agent plist if it exists (agent now runs inside daemon)
     let legacy = legacy_agent_plist_path();
     if legacy.exists() {
-        let _ = remove_launchd_service(legacy, LEGACY_AGENT_PLIST_LABEL, "legacy agent");
+        let _ = remove_launchd_service(&legacy, LEGACY_AGENT_PLIST_LABEL, "legacy agent");
     }
-    remove_launchd_service(plist_path(), PLIST_LABEL, "service")
+    remove_launchd_service(&plist_path(), PLIST_LABEL, "service")
 }
 
 #[cfg(target_os = "macos")]

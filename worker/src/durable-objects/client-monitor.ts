@@ -613,7 +613,7 @@ export class ClientMonitor implements DurableObject {
           "ping_interval_s", "speed_test_interval_s", "probe_size_bytes",
           "full_test_schedule", "full_test_payload_bytes",
           "alert_latency_threshold_ms", "alert_loss_threshold_pct",
-          "grace_period_s",
+          "grace_period_s", "notifications_enabled",
         ];
         const configUpdates: Partial<ClientConfig> = {};
         for (const key of allowed) {
@@ -722,18 +722,29 @@ export class ClientMonitor implements DurableObject {
       .bind(alertId, this.clientId, type, severity, value, threshold, timestamp)
       .run();
 
-    try {
-      await dispatchAlert(this.env, {
-        alert_id: alertId,
-        client_id: this.clientId,
-        type,
-        severity,
-        value,
-        threshold,
-        timestamp,
-      });
-    } catch {
-      // Best effort — alert is already stored in D1
+    // Only dispatch notifications if enabled for this client
+    if (this.config.notifications_enabled) {
+      try {
+        // Look up client name for friendlier notifications
+        const clientRow = await this.env.DB.prepare(
+          "SELECT name FROM clients WHERE id = ?"
+        )
+          .bind(this.clientId)
+          .first<{ name: string }>();
+
+        await dispatchAlert(this.env, {
+          alert_id: alertId,
+          client_id: this.clientId,
+          client_name: clientRow?.name,
+          type,
+          severity,
+          value,
+          threshold,
+          timestamp,
+        });
+      } catch {
+        // Best effort — alert is already stored in D1
+      }
     }
   }
 }

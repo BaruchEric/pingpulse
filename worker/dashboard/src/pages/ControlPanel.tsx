@@ -8,8 +8,9 @@ const INPUT_CLASS = "w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 p
 
 export function ControlPanel() {
   const { id } = useParams<{ id: string }>();
-  const { data: client, refresh: refreshClient } = useClient(id!);
-  const { data: status, refresh: refreshStatus } = useClientStatus(id!);
+  const clientId = id ?? "";
+  const { data: client, refresh: refreshClient } = useClient(clientId);
+  const { data: status, refresh: refreshStatus } = useClientStatus(clientId);
   const [busy, setBusy] = useState<string | null>(null);
   const [simLatency, setSimLatency] = useState("0");
   const [simLoss, setSimLoss] = useState("0");
@@ -33,7 +34,7 @@ export function ControlPanel() {
   const runCommand = async (command: string, params?: Record<string, unknown>, label?: string) => {
     setBusy(command);
     try {
-      await api.sendCommand(id!, command, params);
+      await api.sendCommand(clientId, command, params);
       showToast(`${label || command} sent`);
       refreshStatus();
       refreshClient();
@@ -233,7 +234,7 @@ function ConfigEditor({
   onSave,
   busy,
 }: {
-  config: { ping_interval_s: number; speed_test_interval_s: number; alert_latency_threshold_ms: number; alert_loss_threshold_pct: number; grace_period_s: number };
+  config: { ping_interval_s: number; speed_test_interval_s: number; alert_latency_threshold_ms: number; alert_loss_threshold_pct: number; grace_period_s: number; notifications_enabled: boolean };
   onSave: (c: Record<string, unknown>) => void;
   busy: boolean;
 }) {

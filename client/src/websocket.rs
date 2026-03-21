@@ -15,6 +15,7 @@ type WsSink = futures_util::stream::SplitSink<
     Message,
 >;
 
+#[allow(clippy::cast_possible_truncation)]
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -49,9 +50,11 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             Ok(Shutdown::Disconnected) => {
                 consecutive_auth_failures = 0;
                 let delay = backoff.next_delay();
+                #[allow(clippy::cast_possible_truncation)]
+                let delay_ms = delay.as_millis() as u64;
                 warn!(
                     event = "ws_disconnected",
-                    reconnect_in_ms = delay.as_millis() as u64,
+                    reconnect_in_ms = delay_ms,
                 );
                 time::sleep(delay).await;
             }
@@ -94,10 +97,12 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                 }
 
                 let delay = backoff.next_delay();
+                #[allow(clippy::cast_possible_truncation)]
+                let delay_ms = delay.as_millis() as u64;
                 error!(
                     event = "ws_error",
                     error = %e,
-                    reconnect_in_ms = delay.as_millis() as u64,
+                    reconnect_in_ms = delay_ms,
                 );
                 time::sleep(delay).await;
             }
@@ -120,6 +125,7 @@ enum Shutdown {
     Deregistered,
 }
 
+#[allow(clippy::too_many_lines)]
 async fn connect_and_run(
     config: &mut Config,
     http: &reqwest::Client,
@@ -161,11 +167,11 @@ async fn connect_and_run(
     info!(event = "ws_connected");
     backoff.reset();
 
-    let mut ping_interval = time::interval(Duration::from_secs(config.ping.interval_s as u64));
+    let mut ping_interval = time::interval(Duration::from_secs(u64::from(config.ping.interval_s)));
     ping_interval.tick().await; // Skip the immediate first tick
     let mut ping_counter: u64 = 0;
 
-    let mut speed_test_interval = time::interval(Duration::from_secs(config.speed_test.interval_s as u64));
+    let mut speed_test_interval = time::interval(Duration::from_secs(u64::from(config.speed_test.interval_s)));
     speed_test_interval.tick().await; // Skip the immediate first tick
 
     let (speed_tx, mut speed_rx) = mpsc::unbounded_channel::<OutgoingMessage>();
@@ -255,7 +261,7 @@ async fn connect_and_run(
                 }
             }
 
-            _ = &mut shutdown => {
+            () = &mut shutdown => {
                 let _ = sink.close().await;
                 return Ok(Shutdown::Graceful);
             }
@@ -263,6 +269,7 @@ async fn connect_and_run(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 async fn handle_message(
     msg: IncomingMessage,
     config: &mut Config,
@@ -309,11 +316,11 @@ async fn handle_message(
                 error!(event = "config_save_error", error = %e);
             }
             if config.ping.interval_s != old_interval {
-                *ping_interval = time::interval(Duration::from_secs(config.ping.interval_s as u64));
+                *ping_interval = time::interval(Duration::from_secs(u64::from(config.ping.interval_s)));
                 ping_interval.tick().await; // Skip immediate tick
             }
             if config.speed_test.interval_s != old_speed_interval {
-                *speed_test_interval = time::interval(Duration::from_secs(config.speed_test.interval_s as u64));
+                *speed_test_interval = time::interval(Duration::from_secs(u64::from(config.speed_test.interval_s)));
                 speed_test_interval.tick().await; // Skip immediate tick
             }
             info!(
@@ -324,8 +331,8 @@ async fn handle_message(
                 speed_test_interval_changed = (config.speed_test.interval_s != old_speed_interval),
                 probe_changed = (config.speed_test.probe_size_bytes != old_probe),
                 full_payload_changed = (config.speed_test.full_test_payload_bytes != old_full),
-                latency_threshold_changed = (config.alerts.latency_threshold_ms != old_latency),
-                loss_threshold_changed = (config.alerts.loss_threshold_pct != old_loss),
+                latency_threshold_changed = ((config.alerts.latency_threshold_ms - old_latency).abs() > f64::EPSILON),
+                loss_threshold_changed = ((config.alerts.loss_threshold_pct - old_loss).abs() > f64::EPSILON),
                 grace_period_changed = (config.ping.grace_period_s != old_grace),
             );
         }
@@ -414,6 +421,7 @@ impl Backoff {
         self.current_ms = Self::INITIAL_MS;
     }
 
+    #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
     fn next_delay(&mut self) -> Duration {
         let jitter_range = self.current_ms / 4; // ±25%
         let jitter = if jitter_range > 0 {

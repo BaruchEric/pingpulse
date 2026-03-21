@@ -169,9 +169,8 @@ async fn get_logs() -> Json<LogsResponse> {
 fn read_tail_lines(path: &std::path::Path, n: usize) -> Vec<String> {
     use std::io::{Read, Seek, SeekFrom};
 
-    let mut file = match std::fs::File::open(path) {
-        Ok(f) => f,
-        Err(_) => return vec![],
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return vec![];
     };
     let len = match file.metadata() {
         Ok(m) => m.len(),
@@ -186,9 +185,8 @@ fn read_tail_lines(path: &std::path::Path, n: usize) -> Vec<String> {
     let offset = len - read_size as u64;
     file.seek(SeekFrom::Start(offset)).ok();
     let mut buf = vec![0u8; read_size];
-    let bytes_read = match file.read(&mut buf) {
-        Ok(n) => n,
-        Err(_) => return vec![],
+    let Ok(bytes_read) = file.read(&mut buf) else {
+        return vec![];
     };
     buf.truncate(bytes_read);
 
@@ -359,8 +357,8 @@ mod tests {
             },
             speed_test: crate::config::SpeedTestConfig {
                 interval_s: 300,
-                probe_size_bytes: 262144,
-                full_test_payload_bytes: 10485760,
+                probe_size_bytes: 262_144,
+                full_test_payload_bytes: 10_485_760,
                 full_test_schedule: "0 */6 * * *".into(),
             },
             alerts: crate::config::AlertConfig {

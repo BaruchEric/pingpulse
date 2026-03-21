@@ -45,8 +45,8 @@ pub struct LoggingConfig {
     pub retention_days: u32,
 }
 
-/// Remote config pushed by server via WebSocket config_update message.
-/// Maps to backend ClientConfig (all 7 fields).
+/// Remote config pushed by server via WebSocket `config_update` message.
+/// Maps to backend `ClientConfig` (all 7 fields).
 #[derive(Debug, Clone, Deserialize)]
 pub struct RemoteConfig {
     pub ping_interval_s: u32,
@@ -85,7 +85,7 @@ impl Config {
         self.speed_test.interval_s = remote.speed_test_interval_s;
         self.speed_test.probe_size_bytes = remote.probe_size_bytes;
         self.speed_test.full_test_payload_bytes = remote.full_test_payload_bytes;
-        self.speed_test.full_test_schedule = remote.full_test_schedule.clone();
+        self.speed_test.full_test_schedule.clone_from(&remote.full_test_schedule);
         self.alerts.latency_threshold_ms = remote.alert_latency_threshold_ms;
         self.alerts.loss_threshold_pct = remote.alert_loss_threshold_pct;
     }
@@ -109,7 +109,7 @@ impl Config {
             },
             speed_test: SpeedTestConfig {
                 interval_s: 300,
-                probe_size_bytes: 262144,
+                probe_size_bytes: 262_144,
                 full_test_payload_bytes: 10_485_760,
                 full_test_schedule: "0 */6 * * *".into(),
             },
@@ -160,8 +160,8 @@ mod tests {
             },
             speed_test: SpeedTestConfig {
                 interval_s: 300,
-                probe_size_bytes: 262144,
-                full_test_payload_bytes: 10485760,
+                probe_size_bytes: 262_144,
+                full_test_payload_bytes: 10_485_760,
                 full_test_schedule: "0 */6 * * *".into(),
             },
             alerts: AlertConfig {
@@ -213,8 +213,8 @@ mod tests {
             },
             speed_test: SpeedTestConfig {
                 interval_s: 300,
-                probe_size_bytes: 262144,
-                full_test_payload_bytes: 10485760,
+                probe_size_bytes: 262_144,
+                full_test_payload_bytes: 10_485_760,
                 full_test_schedule: "0 */6 * * *".into(),
             },
             alerts: AlertConfig {
@@ -230,8 +230,8 @@ mod tests {
         let remote = RemoteConfig {
             ping_interval_s: 15,
             speed_test_interval_s: 180,
-            probe_size_bytes: 131072,
-            full_test_payload_bytes: 5242880,
+            probe_size_bytes: 131_072,
+            full_test_payload_bytes: 5_242_880,
             full_test_schedule: "0 */3 * * *".into(),
             alert_latency_threshold_ms: 50.0,
             alert_loss_threshold_pct: 2.5,
@@ -242,7 +242,7 @@ mod tests {
 
         assert_eq!(config.ping.interval_s, 15);
         assert_eq!(config.ping.grace_period_s, 120);
-        assert_eq!(config.speed_test.probe_size_bytes, 131072);
+        assert_eq!(config.speed_test.probe_size_bytes, 131_072);
         assert_eq!(config.alerts.latency_threshold_ms, 50.0);
         // Server config should NOT change
         assert_eq!(config.server.client_id, "abc");

@@ -10,6 +10,7 @@ export function useUPlotChart(
   const chartRef = useRef<uPlot | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
   const getOptsRef = useRef(getOpts);
+  // eslint-disable-next-line react-hooks/refs -- intentional ref sync pattern for stable callback
   getOptsRef.current = getOpts;
 
   // Cleanup on unmount only

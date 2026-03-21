@@ -16,8 +16,9 @@ export function ClientDetail() {
   const [speedTestRunning, setSpeedTestRunning] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const baseCountRef = useRef<number>(0);
-  const { data: client, loading: clientLoading } = useClient(id!);
-  const { data: metrics, loading: metricsLoading, refresh: refreshMetrics } = useMetrics(id!, range);
+  const clientId = id ?? "";
+  const { data: client, loading: clientLoading } = useClient(clientId);
+  const { data: metrics, loading: metricsLoading, refresh: refreshMetrics } = useMetrics(clientId, range);
   const { data: alerts } = useAlerts(id, 10);
 
   const stopPolling = () => {
@@ -49,7 +50,7 @@ export function ClientDetail() {
     try {
       baseCountRef.current = metrics?.speed_tests?.length ?? 0;
       setSpeedTestRunning(true);
-      await api.triggerSpeedTest(id!);
+      await api.triggerSpeedTest(clientId);
       // Poll every 3s for up to 60s waiting for results
       let attempts = 0;
       pollRef.current = setInterval(() => {

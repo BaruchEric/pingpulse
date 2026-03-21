@@ -6,6 +6,9 @@
     "lib": ["ESNext"],
     "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers"],
     "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {

@@ -5,6 +5,7 @@ use tracing::info;
 
 use crate::messages::{SpeedTestResult, SpeedTestType};
 
+#[allow(clippy::cast_precision_loss)]
 fn bytes_to_mbps(bytes: u64, elapsed: Duration) -> f64 {
     (bytes as f64 * 8.0) / (elapsed.as_secs_f64() * 1_000_000.0)
 }
@@ -43,10 +44,12 @@ pub async fn run_probe(
     let dl_start = Instant::now();
     let dl_bytes = http.get(&download_url).send().await?.bytes().await?;
     let dl_elapsed = dl_start.elapsed();
+    #[allow(clippy::cast_possible_truncation)]
     let download_mbps = bytes_to_mbps(dl_bytes.len() as u64, dl_elapsed);
 
     // Upload — allocate before starting the timer
     let upload_url = format!("{base_url}/api/speedtest/upload");
+    #[allow(clippy::cast_possible_truncation)]
     let payload = vec![0u8; payload_size as usize];
     let ul_start = Instant::now();
     http.post(&upload_url).body(payload).send().await?;
@@ -62,6 +65,7 @@ pub async fn run_probe(
         download_mbps,
         upload_mbps,
         payload_bytes: payload_size,
+        #[allow(clippy::cast_possible_truncation)]
         duration_ms: total_elapsed.as_millis() as u64,
     };
 
@@ -107,6 +111,7 @@ pub async fn run_full(
         total_dl_bytes += task.await??;
     }
     let dl_elapsed = dl_start.elapsed();
+    #[allow(clippy::cast_possible_truncation)]
     let download_mbps = bytes_to_mbps(total_dl_bytes as u64, dl_elapsed);
 
     // Parallel upload
@@ -116,6 +121,7 @@ pub async fn run_full(
         .map(|_| {
             let http = http.clone();
             let url = upload_url.clone();
+            #[allow(clippy::cast_possible_truncation)]
             let payload = vec![0u8; chunk_size as usize];
             tokio::spawn(async move {
                 http.post(&url).body(payload).send().await?;
@@ -139,6 +145,7 @@ pub async fn run_full(
         download_mbps,
         upload_mbps,
         payload_bytes: total_payload,
+        #[allow(clippy::cast_possible_truncation)]
         duration_ms: total_elapsed.as_millis() as u64,
     };
 

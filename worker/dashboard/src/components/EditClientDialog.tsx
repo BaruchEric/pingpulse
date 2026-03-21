@@ -15,6 +15,7 @@ export function EditClientDialog({
   const [speedTestInterval, setSpeedTestInterval] = useState(String(client.config.speed_test_interval_s ?? 300));
   const [latencyThreshold, setLatencyThreshold] = useState(String(client.config.alert_latency_threshold_ms));
   const [lossThreshold, setLossThreshold] = useState(String(client.config.alert_loss_threshold_pct));
+  const [notificationsEnabled, setNotificationsEnabled] = useState(client.config.notifications_enabled ?? true);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,6 +30,7 @@ export function EditClientDialog({
           speed_test_interval_s: parseInt(speedTestInterval),
           alert_latency_threshold_ms: parseFloat(latencyThreshold),
           alert_loss_threshold_pct: parseFloat(lossThreshold),
+          notifications_enabled: notificationsEnabled,
         },
       });
       onClose();
@@ -76,6 +78,18 @@ export function EditClientDialog({
             <input type="number" value={lossThreshold} onChange={(e) => setLossThreshold(e.target.value)}
               className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm font-mono text-zinc-100 focus:border-[var(--color-accent)] focus:outline-none" />
           </div>
+        </div>
+        <div className="flex items-center gap-3 pt-1">
+          <label className="relative inline-flex cursor-pointer items-center">
+            <input
+              type="checkbox"
+              checked={notificationsEnabled}
+              onChange={(e) => setNotificationsEnabled(e.target.checked)}
+              className="peer sr-only"
+            />
+            <div className="h-5 w-9 rounded-full bg-zinc-700 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-zinc-400 after:transition-all peer-checked:bg-[var(--color-accent)] peer-checked:after:translate-x-full peer-checked:after:bg-white" />
+          </label>
+          <span className="text-sm text-zinc-400">Send notifications (Email & Telegram)</span>
         </div>
         <div className="flex gap-2 pt-2">
           <button type="submit" disabled={saving}

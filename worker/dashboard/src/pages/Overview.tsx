@@ -3,7 +3,8 @@ import { ClientCard } from "@/components/ClientCard";
 import { StatsBar } from "@/components/StatsBar";
 
 export function Overview() {
-  const { data: clients, loading, error } = useClients(10_000);
+  const { data, loading, error } = useClients(10_000);
+  const clients = data?.clients ?? null;
 
   if (loading && !clients) {
     return <div className="text-sm text-zinc-400">Loading clients...</div>;

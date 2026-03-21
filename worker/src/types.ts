@@ -7,6 +7,7 @@ export interface ClientConfig {
   alert_latency_threshold_ms: number;
   alert_loss_threshold_pct: number;
   grace_period_s: number;
+  notifications_enabled: boolean;
 }
 
 export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
@@ -18,6 +19,7 @@ export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   alert_latency_threshold_ms: 100,
   alert_loss_threshold_pct: 5,
   grace_period_s: 60,
+  notifications_enabled: true,
 };
 
 export interface PingResult {

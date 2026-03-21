@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 
 const statements = [
-  `CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, location TEXT NOT NULL DEFAULT '', secret_hash TEXT NOT NULL, config_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, last_seen TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, location TEXT NOT NULL DEFAULT '', secret_hash TEXT NOT NULL, config_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, last_seen TEXT NOT NULL, client_version TEXT NOT NULL DEFAULT '')`,
   `CREATE TABLE IF NOT EXISTS registration_tokens (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, used_by_client_id TEXT)`,
   `CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS ping_results (id TEXT PRIMARY KEY, client_id TEXT NOT NULL, timestamp TEXT NOT NULL, rtt_ms REAL NOT NULL, jitter_ms REAL NOT NULL, direction TEXT NOT NULL CHECK (direction IN ('cf_to_client', 'client_to_cf')), status TEXT NOT NULL CHECK (status IN ('ok', 'timeout', 'error')), FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE)`,
