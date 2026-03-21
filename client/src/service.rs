@@ -3,7 +3,9 @@ use std::path::PathBuf;
 #[cfg(not(target_os = "windows"))]
 use std::process::Command;
 
-use anyhow::{bail, Context, Result};
+#[cfg(not(target_os = "windows"))]
+use anyhow::bail;
+use anyhow::{Context, Result};
 use tracing::info;
 
 /// Install and start the daemon as a system service.

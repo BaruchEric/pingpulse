@@ -46,7 +46,8 @@ try {
         New-Item -ItemType Directory -Path $installDir -Force | Out-Null
     }
     Move-Item -Path (Join-Path $tmpDir "pingpulse.exe") -Destination $binPath -Force
-    Write-Host "Installed pingpulse to ${binPath}"
+    $version = & $binPath --version 2>&1
+    Write-Host "Installed pingpulse ${version} to ${binPath}"
 
     # --- Add to PATH if not present ---
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
