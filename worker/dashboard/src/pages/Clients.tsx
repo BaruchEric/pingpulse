@@ -59,6 +59,7 @@ export function Clients() {
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Location</th>
+                <th className="px-4 py-3">Version</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Ping Interval</th>
                 <th className="px-4 py-3">Last Seen</th>
@@ -74,6 +75,7 @@ export function Clients() {
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-zinc-400">{client.location}</td>
+                  <td className="px-4 py-3 font-mono text-zinc-400">{client.client_version || "—"}</td>
                   <td className="px-4 py-3">
                     <StatusBadge lastSeen={client.last_seen} />
                   </td>
