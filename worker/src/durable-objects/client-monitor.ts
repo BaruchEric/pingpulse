@@ -19,6 +19,7 @@ interface PingInFlight {
 
 const PING_TIMEOUT_MS = 10_000;
 const LOSS_WINDOW_SIZE = 20;
+const MAX_CONSECUTIVE_TIMEOUTS = 3;
 
 export class ClientMonitor implements DurableObject {
   private state: DurableObjectState;
@@ -44,6 +45,7 @@ export class ClientMonitor implements DurableObject {
   // Control panel state
   private paused: boolean = false;
   private simulation: { latency_ms: number; loss_pct: number } = { latency_ms: 0, loss_pct: 0 };
+  private consecutiveTimeouts: number = 0;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -310,6 +312,17 @@ export class ClientMonitor implements DurableObject {
     // Normal ping alarm — first resolve any timed-out pings
     this.resolveTimedOutPings();
 
+    // Detect dead connections: if too many consecutive pings timed out,
+    // force-close all sessions so handleSessionDrop fires the down alert
+    if (this.consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS && this.sessions.length > 0) {
+      console.log(`[${this.clientId}] ${this.consecutiveTimeouts} consecutive timeouts — closing dead sessions`);
+      for (const ws of this.sessions) {
+        try { ws.close(1001, "Dead connection detected"); } catch { /* already closed */ }
+      }
+      this.consecutiveTimeouts = 0;
+      return; // webSocketClose handler will set the disconnect alarm
+    }
+
     if (this.sessions.length > 0) {
       if (!this.paused) {
         // Simulate packet loss: randomly skip pings
@@ -347,12 +360,14 @@ export class ClientMonitor implements DurableObject {
     }
   }
 
-  private resolveTimedOutPings(): void {
+  private resolveTimedOutPings(): number {
     const now = Date.now();
+    let timedOut = 0;
     for (const [pingId, ping] of this.pingsInFlight) {
       if (now - ping.sent_ts >= PING_TIMEOUT_MS) {
         this.pingsInFlight.delete(pingId);
         this.recordLoss("timeout");
+        timedOut++;
         this.pingBuffer.push({
           client_id: this.clientId,
           timestamp: new Date(ping.sent_ts).toISOString(),
@@ -363,6 +378,10 @@ export class ClientMonitor implements DurableObject {
         });
       }
     }
+    if (timedOut > 0) {
+      this.consecutiveTimeouts += timedOut;
+    }
+    return timedOut;
   }
 
   private recordLoss(status: "ok" | "timeout" | "error"): void {
@@ -439,6 +458,7 @@ export class ClientMonitor implements DurableObject {
     if (!inFlight) return;
 
     this.pingsInFlight.delete(msg.id);
+    this.consecutiveTimeouts = 0;
     const rtt = Date.now() - inFlight.sent_ts + this.simulation.latency_ms;
 
     // RFC 3550 jitter: J(i) = J(i-1) + (|D(i-1,i)| - J(i-1)) / 16

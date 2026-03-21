@@ -415,22 +415,33 @@ const RUN_VALUE: &str = "PingPulse";
 
 #[cfg(target_os = "windows")]
 fn install_windows_task(binary_path: &str) -> Result<()> {
+    use std::os::windows::process::CommandExt;
     use std::process::Command;
     use winreg::enums::*;
     use winreg::RegKey;
 
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
     let logs_dir = crate::config::Config::logs_dir();
     std::fs::create_dir_all(&logs_dir)?;
 
-    // Add to HKCU\...\Run so it starts at logon (no admin needed)
+    // Create a VBS launcher script that starts the process hidden
+    let vbs_path = logs_dir.join("start-hidden.vbs");
+    let vbs_content = format!(
+        r#"CreateObject("WScript.Shell").Run """{}"" start --foreground", 0, False"#,
+        binary_path
+    );
+    std::fs::write(&vbs_path, &vbs_content)?;
+
+    // Add VBS launcher to HKCU\...\Run so it starts hidden at logon
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let (run_key, _) = hkcu.create_subkey(RUN_KEY)
         .context("Failed to open registry Run key")?;
-    let value = format!("\"{}\" start --foreground", binary_path);
+    let value = format!("wscript.exe \"{}\"", vbs_path.display());
     run_key.set_value(RUN_VALUE, &value)
         .context("Failed to set registry Run value")?;
 
-    // Start the process now in the background
+    // Start the process now in the background (hidden)
     let stdout_log = logs_dir.join("stdout.log");
     let stderr_log = logs_dir.join("stderr.log");
     let stdout_file = std::fs::File::create(&stdout_log)?;
@@ -440,6 +451,7 @@ fn install_windows_task(binary_path: &str) -> Result<()> {
         .args(["start", "--foreground"])
         .stdout(stdout_file)
         .stderr(stderr_file)
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .context("Failed to spawn background process")?;
 

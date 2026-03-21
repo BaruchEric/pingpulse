@@ -7,11 +7,11 @@ const DEFAULT_PING_INTERVAL_MS = 30_000;
  * Derive the display grace period from the ping interval.
  * last_seen updates every ping_interval/2 (throttled), so the staleness
  * can be up to ~1.5x the ping interval during normal operation.
- * We use 6x the ping interval with a 90s floor to account for
+ * We use 3x the ping interval with a 60s floor to account for
  * D1 read-replica lag in production.
  */
 function displayGracePeriodMs(pingIntervalMs?: number): number {
-  return Math.max((pingIntervalMs ?? DEFAULT_PING_INTERVAL_MS) * 6, 90_000);
+  return Math.max((pingIntervalMs ?? DEFAULT_PING_INTERVAL_MS) * 3, 60_000);
 }
 
 export function getClientStatus(
