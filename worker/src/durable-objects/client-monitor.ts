@@ -2,6 +2,7 @@ import type { Env } from "@/index";
 import type {
   ClientConfig,
   PingResult,
+  ProbeRecord,
   SpeedTestResult,
   AlertRecord,
   WSMessage,
@@ -230,6 +231,31 @@ export class ClientMonitor implements DurableObject {
         case "speed_test_result":
           await this.handleSpeedTestResult(msg.result);
           break;
+        case "probe_result": {
+          const { session_id, record } = msg as { type: "probe_result"; session_id: string; record: ProbeRecord };
+          // Write directly to D1 for real-time ingestion
+          await this.env.DB.prepare(
+            `INSERT INTO client_probe_results
+             (client_id, session_id, seq_id, probe_type, target, timestamp, rtt_ms, status_code, status, jitter_ms, received_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(client_id, session_id, seq_id) DO NOTHING`
+          ).bind(
+            this.clientId, session_id, record.seq_id,
+            record.probe_type, record.target, record.timestamp,
+            record.rtt_ms, record.status_code, record.status, record.jitter_ms,
+            Date.now()
+          ).run();
+
+          // Write to Analytics Engine
+          if (record.rtt_ms != null) {
+            this.env.METRICS.writeDataPoint({
+              blobs: [this.clientId, record.probe_type, record.target, record.status],
+              doubles: [record.rtt_ms, record.jitter_ms ?? 0],
+              indexes: [this.clientId],
+            });
+          }
+          break;
+        }
       }
 
       await Promise.all([this.flushBuffer(), this.updateLastSeen()]);
