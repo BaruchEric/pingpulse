@@ -404,133 +404,107 @@ fn remove_binaries(paths: &[&std::path::Path]) {
     }
 }
 
-// --- Windows (Task Scheduler) ---
+// --- Windows (Registry Run key) ---
 
 #[cfg(target_os = "windows")]
-const TASK_NAME: &str = "PingPulse";
+const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+#[cfg(target_os = "windows")]
+const RUN_VALUE: &str = "PingPulse";
 
 #[cfg(target_os = "windows")]
 fn install_windows_task(binary_path: &str) -> Result<()> {
     use std::process::Command;
+    use winreg::enums::*;
+    use winreg::RegKey;
 
     let logs_dir = crate::config::Config::logs_dir();
     std::fs::create_dir_all(&logs_dir)?;
 
-    // Create a scheduled task that runs at logon and restarts on failure
-    let xml = format!(
-        r#"<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <Triggers>
-    <LogonTrigger>
-      <Enabled>true</Enabled>
-    </LogonTrigger>
-  </Triggers>
-  <Settings>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <RestartOnFailure>
-      <Interval>PT1M</Interval>
-      <Count>999</Count>
-    </RestartOnFailure>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Hidden>false</Hidden>
-  </Settings>
-  <Actions>
-    <Exec>
-      <Command>{binary_path}</Command>
-      <Arguments>start --foreground</Arguments>
-    </Exec>
-  </Actions>
-</Task>"#
-    );
+    // Add to HKCU\...\Run so it starts at logon (no admin needed)
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (run_key, _) = hkcu.create_subkey(RUN_KEY)
+        .context("Failed to open registry Run key")?;
+    let value = format!("\"{}\" start --foreground", binary_path);
+    run_key.set_value(RUN_VALUE, &value)
+        .context("Failed to set registry Run value")?;
 
-    let xml_path = logs_dir.join("task.xml");
-    std::fs::write(&xml_path, &xml)?;
+    // Start the process now in the background
+    let stdout_log = logs_dir.join("stdout.log");
+    let stderr_log = logs_dir.join("stderr.log");
+    let stdout_file = std::fs::File::create(&stdout_log)?;
+    let stderr_file = std::fs::File::create(&stderr_log)?;
 
-    let output = Command::new("schtasks")
-        .args([
-            "/Create",
-            "/TN", TASK_NAME,
-            "/XML", xml_path.to_str().unwrap(),
-            "/F",
-        ])
-        .output()
-        .context("Failed to run schtasks")?;
+    Command::new(binary_path)
+        .args(["start", "--foreground"])
+        .stdout(stdout_file)
+        .stderr(stderr_file)
+        .spawn()
+        .context("Failed to spawn background process")?;
 
-    let _ = std::fs::remove_file(&xml_path);
-
-    if !output.status.success() {
-        bail!(
-            "schtasks /Create failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    // Start immediately
-    let output = Command::new("schtasks")
-        .args(["/Run", "/TN", TASK_NAME])
-        .output()
-        .context("Failed to start task")?;
-
-    if !output.status.success() {
-        bail!(
-            "schtasks /Run failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    info!(event = "service_installed", method = "task_scheduler");
+    info!(event = "service_installed", method = "registry_run");
     println!("PingPulse service installed and started.");
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
 fn stop_windows_task() -> Result<()> {
-    use std::process::Command;
+    // Remove the Run key
+    remove_run_key();
 
-    let _ = Command::new("schtasks")
-        .args(["/End", "/TN", TASK_NAME])
-        .output();
+    // Kill any running pingpulse processes (except ourselves)
+    let our_pid = std::process::id();
+    let output = std::process::Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq pingpulse.exe", "/FO", "CSV", "/NH"])
+        .output()
+        .context("Failed to run tasklist")?;
 
-    delete_windows_task()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        // CSV format: "pingpulse.exe","1234",...
+        let parts: Vec<&str> = line.split(',').collect();
+        if let Some(pid_str) = parts.get(1) {
+            let pid_str = pid_str.trim_matches('"');
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                if pid != our_pid {
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/PID", &pid.to_string(), "/F"])
+                        .output();
+                }
+            }
+        }
+    }
+
     println!("PingPulse service stopped and removed.");
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
-fn delete_windows_task() -> Result<()> {
-    use std::process::Command;
+fn remove_run_key() {
+    use winreg::enums::*;
+    use winreg::RegKey;
 
-    let output = Command::new("schtasks")
-        .args(["/Delete", "/TN", TASK_NAME, "/F"])
-        .output()
-        .context("Failed to run schtasks")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if !stderr.contains("does not exist") {
-            bail!("schtasks /Delete failed: {stderr}");
-        }
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(run_key) = hkcu.open_subkey_with_flags(RUN_KEY, KEY_WRITE) {
+        let _ = run_key.delete_value(RUN_VALUE);
     }
+}
+
+#[cfg(target_os = "windows")]
+fn delete_windows_task() -> Result<()> {
+    remove_run_key();
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
 fn status_windows_task() -> Result<bool> {
-    use std::process::Command;
-
-    let output = Command::new("schtasks")
-        .args(["/Query", "/TN", TASK_NAME, "/FO", "CSV", "/NH"])
+    let output = std::process::Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq pingpulse.exe", "/FO", "CSV", "/NH"])
         .output()
-        .context("Failed to run schtasks")?;
-
-    if !output.status.success() {
-        return Ok(false);
-    }
+        .context("Failed to run tasklist")?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(stdout.contains("Running"))
+    // tasklist returns "INFO: No tasks are running..." when no match
+    Ok(stdout.contains("pingpulse.exe"))
 }
 
 #[cfg(test)]
