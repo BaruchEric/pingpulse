@@ -687,6 +687,20 @@ export class ClientMonitor implements DurableObject {
         return Response.json({ ok: true, message: "Client disconnected" });
       }
 
+      case "self_update": {
+        const version = (params?.version as string) ?? this.env.LATEST_CLIENT_VERSION ?? "";
+        if (!version) return Response.json({ error: "No version specified" }, { status: 400 });
+        if (this.sessions.length === 0) {
+          return Response.json({ ok: false, reason: "not_connected" });
+        }
+        this.broadcast({
+          type: "self_update",
+          version,
+          repo: "BaruchEric/pingpulse",
+        });
+        return Response.json({ ok: true, version });
+      }
+
       case "deregister": {
         // Notify connected agent it has been deleted, then close sessions
         this.broadcast({ type: "deregistered", reason: "Client deleted by admin" });

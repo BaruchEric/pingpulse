@@ -503,6 +503,17 @@ async fn handle_message(
             }
         }
 
+        IncomingMessage::SelfUpdate { version, repo } => {
+            info!(event = "self_update_requested", target_version = %version);
+            let http = http.clone();
+            tokio::spawn(async move {
+                match self_update(&http, &version, &repo).await {
+                    Ok(()) => info!(event = "self_update_complete", version = %version),
+                    Err(e) => error!(event = "self_update_failed", error = %e),
+                }
+            });
+        }
+
         IncomingMessage::StartSpeedTest { test_type } => {
             let http = http.clone();
             let base_url = config.server.base_url.clone();
@@ -538,6 +549,155 @@ async fn handle_message(
         }
     }
     None
+}
+
+// --- Self-update ---
+
+async fn self_update(
+    http: &reqwest::Client,
+    version: &str,
+    repo: &str,
+) -> anyhow::Result<()> {
+    let (os, arch, ext) = platform_triple();
+    let artifact = format!("pingpulse-{os}-{arch}.{ext}");
+    let url = format!("https://github.com/{repo}/releases/download/client-v{version}/{artifact}");
+
+    info!(event = "self_update_downloading", url = %url);
+    let bytes = http.get(&url).send().await?.error_for_status()?.bytes().await?;
+
+    let current_exe = std::env::current_exe()?;
+    let tmp_dir = std::env::temp_dir().join(format!("pingpulse-update-{version}"));
+    std::fs::create_dir_all(&tmp_dir)?;
+
+    let archive_path = tmp_dir.join(&artifact);
+    std::fs::write(&archive_path, &bytes)?;
+
+    // Extract the binary
+    let new_binary = tmp_dir.join(if cfg!(windows) { "pingpulse.exe" } else { "pingpulse" });
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::process::Command;
+        let status = Command::new("tar")
+            .args(["xzf", archive_path.to_str().unwrap(), "-C", tmp_dir.to_str().unwrap()])
+            .status()?;
+        if !status.success() {
+            anyhow::bail!("Failed to extract archive");
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // PowerShell Expand-Archive
+        let status = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile", "-Command",
+                &format!(
+                    "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
+                    archive_path.display(),
+                    tmp_dir.display()
+                ),
+            ])
+            .status()?;
+        if !status.success() {
+            anyhow::bail!("Failed to extract archive");
+        }
+    }
+
+    if !new_binary.exists() {
+        anyhow::bail!("Extracted binary not found at {}", new_binary.display());
+    }
+
+    // Replace the current binary
+    #[cfg(not(target_os = "windows"))]
+    {
+        // On Unix, we can overwrite the running binary (kernel keeps inode alive)
+        // Try direct copy first, fall back to sudo if permission denied
+        if std::fs::copy(&new_binary, &current_exe).is_err() {
+            let status = std::process::Command::new("sudo")
+                .args(["cp", new_binary.to_str().unwrap(), current_exe.to_str().unwrap()])
+                .status()?;
+            if !status.success() {
+                anyhow::bail!("Failed to replace binary (even with sudo)");
+            }
+        }
+        // Ensure executable
+        std::process::Command::new("chmod")
+            .args(["+x", current_exe.to_str().unwrap()])
+            .status()
+            .ok();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Rename current exe, move new one in place
+        let backup = current_exe.with_extension("old.exe");
+        let _ = std::fs::remove_file(&backup);
+        std::fs::rename(&current_exe, &backup)?;
+        std::fs::copy(&new_binary, &current_exe)?;
+    }
+
+    // Cleanup
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+
+    info!(event = "self_update_restarting");
+
+    // Restart the service
+    #[cfg(target_os = "macos")]
+    {
+        let uid = std::process::Command::new("id")
+            .arg("-u")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        std::process::Command::new("launchctl")
+            .args(["kickstart", "-k", &format!("gui/{uid}/ca.beric.pingpulse")])
+            .spawn()
+            .ok();
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("systemctl")
+            .args(["--user", "restart", "pingpulse"])
+            .spawn()
+            .ok();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Start new process and exit
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        std::process::Command::new(&current_exe)
+            .args(["start", "--foreground"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .ok();
+        std::process::exit(0);
+    }
+
+    Ok(())
+}
+
+fn platform_triple() -> (&'static str, &'static str, &'static str) {
+    let os = if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    };
+    let arch = if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else {
+        "amd64"
+    };
+    let ext = if cfg!(target_os = "windows") { "zip" } else { "tar.gz" };
+    (os, arch, ext)
 }
 
 // --- Backoff ---

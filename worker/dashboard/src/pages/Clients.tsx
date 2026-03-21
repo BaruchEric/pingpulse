@@ -88,9 +88,16 @@ export function Clients() {
                   <td className="px-4 py-3 font-mono text-zinc-400">
                     {client.client_version || "—"}
                     {latestVersion && client.client_version && client.client_version < latestVersion && (
-                      <span className="ml-2 inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
-                        {latestVersion} available
-                      </span>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!confirm(`Update ${client.name} from v${client.client_version} to v${latestVersion}?`)) return;
+                          await api.sendCommand(client.id, "self_update", { version: latestVersion });
+                        }}
+                        className="ml-2 inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400 hover:bg-amber-500/30 transition-colors cursor-pointer"
+                      >
+                        Update to {latestVersion}
+                      </button>
                     )}
                   </td>
                   <td className="px-4 py-3">

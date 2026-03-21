@@ -69,6 +69,10 @@ pub enum IncomingMessage {
     ServerLogs {
         entries: Vec<ServerLogEntry>,
     },
+    SelfUpdate {
+        version: String,
+        repo: String,
+    },
 }
 
 // --- Outgoing messages (to server) ---
