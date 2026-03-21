@@ -71,6 +71,10 @@ jobs:
             os: windows-latest
             name: pingpulse-windows-amd64
             cross: false
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            name: pingpulse-windows-arm64
+            cross: false
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -147,4 +151,5 @@ jobs:
             pingpulse-linux-amd64/pingpulse-linux-amd64.tar.gz
             pingpulse-linux-arm64/pingpulse-linux-arm64.tar.gz
             pingpulse-windows-amd64/pingpulse-windows-amd64.zip
+            pingpulse-windows-arm64/pingpulse-windows-arm64.zip
           generate_release_notes: true
