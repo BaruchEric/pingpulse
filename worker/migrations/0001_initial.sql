@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS ping_results (
   FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_ping_results_client_ts ON ping_results(client_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_ping_results_client_ts ON ping_results(client_id, timestamp);
 
 CREATE TABLE IF NOT EXISTS speed_tests (
   id TEXT PRIMARY KEY,
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS speed_tests (
   FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_speed_tests_client_ts ON speed_tests(client_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_speed_tests_client_ts ON speed_tests(client_id, timestamp);
 
 CREATE TABLE IF NOT EXISTS outages (
   id TEXT PRIMARY KEY,
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS outages (
   FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_outages_client ON outages(client_id, start_ts);
+CREATE INDEX IF NOT EXISTS idx_outages_client ON outages(client_id, start_ts);
 
 CREATE TABLE IF NOT EXISTS alerts (
   id TEXT PRIMARY KEY,
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS alerts (
   FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_alerts_client_ts ON alerts(client_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_alerts_client_ts ON alerts(client_id, timestamp);
 
 CREATE TABLE IF NOT EXISTS rate_limits (
   key TEXT PRIMARY KEY,

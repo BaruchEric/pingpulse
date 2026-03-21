@@ -90,4 +90,5 @@ export type WSMessage =
   | { type: "speed_test_result"; result: SpeedTestResult }
   | { type: "error"; message: string }
   | { type: "deregistered"; reason: string }
-  | { type: "server_logs"; entries: ServerLogEntry[] };
+  | { type: "server_logs"; entries: ServerLogEntry[] }
+  | { type: "update_available"; latest_version: string; download_url: string };

@@ -131,7 +131,9 @@ async fn connect_and_run(
     let ws_url = base
         .replace("https://", "wss://")
         .replace("http://", "ws://")
-        + ws_path;
+        + ws_path
+        + "?v="
+        + env!("CARGO_PKG_VERSION");
 
     info!(event = "ws_connecting", url = %ws_url);
 

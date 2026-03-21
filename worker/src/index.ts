@@ -15,6 +15,7 @@ export interface Env {
   ALERT_TO_EMAIL: string;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_CHAT_ID: string;
+  LATEST_CLIENT_VERSION: string;
 }
 
 const app = createRouter();

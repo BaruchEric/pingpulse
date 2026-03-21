@@ -26,6 +26,7 @@ pub struct PingConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpeedTestConfig {
+    #[serde(default = "default_speed_test_interval")]
     pub interval_s: u32,
     pub probe_size_bytes: u64,
     pub full_test_payload_bytes: u64,

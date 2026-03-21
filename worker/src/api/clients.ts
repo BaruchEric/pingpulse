@@ -77,7 +77,7 @@ clientRoutes.get("/", async (c) => {
     };
   });
 
-  return c.json({ clients });
+  return c.json({ clients, latest_client_version: c.env.LATEST_CLIENT_VERSION || "" });
 });
 
 clientRoutes.get("/:id", async (c) => {

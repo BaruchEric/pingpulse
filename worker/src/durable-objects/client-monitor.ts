@@ -99,8 +99,8 @@ export class ClientMonitor implements DurableObject {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    // Capture client version from header
-    const clientVersion = request.headers.get("X-Client-Version") || "";
+    // Capture client version from query param (primary) or header (fallback)
+    const clientVersion = url.searchParams.get("v") || request.headers.get("X-Client-Version") || "";
 
     // Accept WebSocket
     const pair = new WebSocketPair();
@@ -139,6 +139,18 @@ export class ClientMonitor implements DurableObject {
         config: this.config,
       } satisfies WSMessage)
     );
+
+    // Notify client if a newer version is available
+    const latestVersion = this.env.LATEST_CLIENT_VERSION || "";
+    if (clientVersion && latestVersion && clientVersion !== latestVersion && clientVersion < latestVersion) {
+      server.send(
+        JSON.stringify({
+          type: "update_available",
+          latest_version: latestVersion,
+          download_url: `https://github.com/BaruchEric/pingpulse/releases/tag/client-v${latestVersion}`,
+        } satisfies WSMessage)
+      );
+    }
 
     // Send recent server-side logs so the client has context
     const entries = await this.gatherRecentLogs();

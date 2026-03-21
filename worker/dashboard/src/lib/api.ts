@@ -46,7 +46,7 @@ export const api = {
     }),
 
   // Clients
-  listClients: () => request<{ clients: Client[] }>("/api/clients"),
+  listClients: () => request<{ clients: Client[]; latest_client_version: string }>("/api/clients"),
   getClient: (id: string) => request<Client>(`/api/clients/${id}`),
   updateClient: (id: string, data: { name?: string; location?: string; config?: Partial<Client["config"]> }) =>
     request<{ ok: boolean }>(`/api/clients/${id}`, {

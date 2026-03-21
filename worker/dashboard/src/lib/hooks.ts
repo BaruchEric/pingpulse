@@ -55,7 +55,7 @@ function usePolling<T>(
 
 export function useClients(intervalMs = 10_000) {
   return usePolling(
-    () => api.listClients().then((r) => r.clients),
+    () => api.listClients().then((r) => ({ clients: r.clients, latest_client_version: r.latest_client_version })),
     intervalMs
   );
 }

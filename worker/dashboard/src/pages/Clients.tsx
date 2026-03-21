@@ -9,7 +9,9 @@ import { EditClientDialog } from "@/components/EditClientDialog";
 import { LocalClientPanel } from "@/components/LocalClientPanel";
 
 export function Clients() {
-  const { data: clients, refresh } = useClients(10_000);
+  const { data, refresh } = useClients(10_000);
+  const clients = data?.clients ?? null;
+  const latestVersion = data?.latest_client_version ?? "";
   const [showRegister, setShowRegister] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -75,7 +77,14 @@ export function Clients() {
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-zinc-400">{client.location}</td>
-                  <td className="px-4 py-3 font-mono text-zinc-400">{client.client_version || "—"}</td>
+                  <td className="px-4 py-3 font-mono text-zinc-400">
+                    {client.client_version || "—"}
+                    {latestVersion && client.client_version && client.client_version < latestVersion && (
+                      <span className="ml-2 inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+                        {latestVersion} available
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <StatusBadge lastSeen={client.last_seen} />
                   </td>
