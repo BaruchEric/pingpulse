@@ -8,6 +8,12 @@ pub struct Config {
     pub speed_test: SpeedTestConfig,
     pub alerts: AlertConfig,
     pub logging: LoggingConfig,
+    #[serde(default)]
+    pub probes: ProbesConfig,
+    #[serde(default)]
+    pub storage: StorageConfig,
+    #[serde(default)]
+    pub sync: SyncConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +51,103 @@ pub struct LoggingConfig {
     pub retention_days: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProbeIcmpConfig {
+    #[serde(default = "default_probe_icmp_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_probe_icmp_interval")]
+    pub interval_s: u32,
+    #[serde(default = "default_probe_icmp_targets")]
+    pub targets: Vec<String>,
+    #[serde(default = "default_probe_icmp_timeout")]
+    pub timeout_ms: u64,
+}
+
+impl Default for ProbeIcmpConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_probe_icmp_enabled(),
+            interval_s: default_probe_icmp_interval(),
+            targets: default_probe_icmp_targets(),
+            timeout_ms: default_probe_icmp_timeout(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProbeHttpConfig {
+    #[serde(default = "default_probe_http_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_probe_http_interval")]
+    pub interval_s: u32,
+    #[serde(default = "default_probe_http_targets")]
+    pub targets: Vec<String>,
+    #[serde(default = "default_probe_http_timeout")]
+    pub timeout_ms: u64,
+}
+
+impl Default for ProbeHttpConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_probe_http_enabled(),
+            interval_s: default_probe_http_interval(),
+            targets: default_probe_http_targets(),
+            timeout_ms: default_probe_http_timeout(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProbesConfig {
+    #[serde(default)]
+    pub icmp: ProbeIcmpConfig,
+    #[serde(default)]
+    pub http: ProbeHttpConfig,
+}
+
+impl Default for ProbesConfig {
+    fn default() -> Self {
+        Self {
+            icmp: ProbeIcmpConfig::default(),
+            http: ProbeHttpConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageConfig {
+    #[serde(default = "default_storage_db_path")]
+    pub db_path: String,
+    #[serde(default = "default_storage_retention_days")]
+    pub retention_days: u32,
+}
+
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
+            db_path: default_storage_db_path(),
+            retention_days: default_storage_retention_days(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncConfig {
+    #[serde(default = "default_sync_batch_size")]
+    pub batch_size: usize,
+    #[serde(default = "default_sync_interval")]
+    pub interval_s: u32,
+}
+
+impl Default for SyncConfig {
+    fn default() -> Self {
+        Self {
+            batch_size: default_sync_batch_size(),
+            interval_s: default_sync_interval(),
+        }
+    }
+}
+
 /// Remote config pushed by server via WebSocket `config_update` message.
 /// Maps to backend `ClientConfig` (all 7 fields).
 #[derive(Debug, Clone, Deserialize)]
@@ -58,10 +161,62 @@ pub struct RemoteConfig {
     pub alert_latency_threshold_ms: f64,
     pub alert_loss_threshold_pct: f64,
     pub grace_period_s: u32,
+    #[serde(default)]
+    pub probe_icmp_interval_s: Option<u32>,
+    #[serde(default)]
+    pub probe_icmp_targets: Option<Vec<String>>,
+    #[serde(default)]
+    pub probe_icmp_timeout_ms: Option<u64>,
+    #[serde(default)]
+    pub probe_http_interval_s: Option<u32>,
+    #[serde(default)]
+    pub probe_http_targets: Option<Vec<String>>,
+    #[serde(default)]
+    pub probe_http_timeout_ms: Option<u64>,
 }
 
 fn default_speed_test_interval() -> u32 {
     300
+}
+
+fn default_probe_icmp_enabled() -> bool {
+    true
+}
+fn default_probe_icmp_interval() -> u32 {
+    5
+}
+fn default_probe_icmp_targets() -> Vec<String> {
+    vec!["8.8.8.8".into(), "1.1.1.1".into(), "9.9.9.9".into()]
+}
+fn default_probe_icmp_timeout() -> u64 {
+    3000
+}
+fn default_probe_http_enabled() -> bool {
+    true
+}
+fn default_probe_http_interval() -> u32 {
+    15
+}
+fn default_probe_http_targets() -> Vec<String> {
+    vec![
+        "https://www.google.com".into(),
+        "https://cloudflare.com".into(),
+    ]
+}
+fn default_probe_http_timeout() -> u64 {
+    5000
+}
+fn default_storage_db_path() -> String {
+    "~/.pingpulse/probes.db".into()
+}
+fn default_storage_retention_days() -> u32 {
+    7
+}
+fn default_sync_batch_size() -> usize {
+    500
+}
+fn default_sync_interval() -> u32 {
+    60
 }
 
 impl Config {
@@ -79,6 +234,15 @@ impl Config {
         Self::config_dir().join("logs")
     }
 
+    #[allow(dead_code)]
+    pub fn resolved_db_path(&self) -> std::path::PathBuf {
+        let path = self
+            .storage
+            .db_path
+            .replace("~", &dirs::home_dir().unwrap().to_string_lossy());
+        std::path::PathBuf::from(path)
+    }
+
     pub fn apply_remote(&mut self, remote: &RemoteConfig) {
         self.ping.interval_s = remote.ping_interval_s;
         self.ping.grace_period_s = remote.grace_period_s;
@@ -88,6 +252,24 @@ impl Config {
         self.speed_test.full_test_schedule.clone_from(&remote.full_test_schedule);
         self.alerts.latency_threshold_ms = remote.alert_latency_threshold_ms;
         self.alerts.loss_threshold_pct = remote.alert_loss_threshold_pct;
+        if let Some(v) = remote.probe_icmp_interval_s {
+            self.probes.icmp.interval_s = v;
+        }
+        if let Some(v) = &remote.probe_icmp_targets {
+            self.probes.icmp.targets = v.clone();
+        }
+        if let Some(v) = remote.probe_icmp_timeout_ms {
+            self.probes.icmp.timeout_ms = v;
+        }
+        if let Some(v) = remote.probe_http_interval_s {
+            self.probes.http.interval_s = v;
+        }
+        if let Some(v) = &remote.probe_http_targets {
+            self.probes.http.targets = v.clone();
+        }
+        if let Some(v) = remote.probe_http_timeout_ms {
+            self.probes.http.timeout_ms = v;
+        }
     }
 
     pub fn new_from_registration(
@@ -121,6 +303,9 @@ impl Config {
                 level: "info".into(),
                 retention_days: 30,
             },
+            probes: ProbesConfig::default(),
+            storage: StorageConfig::default(),
+            sync: SyncConfig::default(),
         }
     }
 
@@ -172,6 +357,9 @@ mod tests {
                 level: "info".into(),
                 retention_days: 30,
             },
+            probes: ProbesConfig::default(),
+            storage: StorageConfig::default(),
+            sync: SyncConfig::default(),
         };
 
         let serialized = toml::to_string_pretty(&config).unwrap();
@@ -225,6 +413,9 @@ mod tests {
                 level: "info".into(),
                 retention_days: 30,
             },
+            probes: ProbesConfig::default(),
+            storage: StorageConfig::default(),
+            sync: SyncConfig::default(),
         };
 
         let remote = RemoteConfig {
@@ -236,6 +427,12 @@ mod tests {
             alert_latency_threshold_ms: 50.0,
             alert_loss_threshold_pct: 2.5,
             grace_period_s: 120,
+            probe_icmp_interval_s: Some(10),
+            probe_icmp_targets: None,
+            probe_icmp_timeout_ms: None,
+            probe_http_interval_s: Some(30),
+            probe_http_targets: Some(vec!["https://example.com".into()]),
+            probe_http_timeout_ms: None,
         };
 
         config.apply_remote(&remote);
@@ -246,5 +443,10 @@ mod tests {
         assert_eq!(config.alerts.latency_threshold_ms, 50.0);
         // Server config should NOT change
         assert_eq!(config.server.client_id, "abc");
+        // Probe overrides should apply
+        assert_eq!(config.probes.icmp.interval_s, 10);
+        assert_eq!(config.probes.icmp.targets, default_probe_icmp_targets()); // None = no override
+        assert_eq!(config.probes.http.interval_s, 30);
+        assert_eq!(config.probes.http.targets, vec!["https://example.com"]);
     }
 }

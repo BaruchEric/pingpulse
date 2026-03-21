@@ -369,6 +369,9 @@ mod tests {
                 level: "info".into(),
                 retention_days: 30,
             },
+            probes: crate::config::ProbesConfig::default(),
+            storage: crate::config::StorageConfig::default(),
+            sync: crate::config::SyncConfig::default(),
         };
         let sanitized = sanitize_config(&config);
         let json = serde_json::to_string(&sanitized).unwrap();
