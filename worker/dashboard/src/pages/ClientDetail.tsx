@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router";
 import { useClient, useMetrics, useAlerts, getTimeRange, type TimeRange } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
+import { SyncStatusBadge } from "@/components/SyncStatusBadge";
 import { TimeRangeSelector } from "@/components/TimeRangeSelector";
 import { LatencyChart } from "@/components/LatencyChart";
 import { ThroughputChart } from "@/components/ThroughputChart";
@@ -82,6 +83,7 @@ export function ClientDetail() {
             gracePeriodMs={client.config.grace_period_s * 1000}
             thresholdMs={client.config.alert_latency_threshold_ms}
           />
+          <SyncStatusBadge clientId={clientId} />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
