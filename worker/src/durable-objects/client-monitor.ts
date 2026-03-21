@@ -280,13 +280,14 @@ export class ClientMonitor implements DurableObject {
   async alarm(): Promise<void> {
     // Check if this is a disconnection grace period check
     if (this.disconnectedAt && this.sessions.length === 0) {
+      const gracePeriod = (this.config.down_alert_grace_seconds ?? this.config.grace_period_s) * 1000;
       const elapsed = Date.now() - this.disconnectedAt;
-      if (elapsed >= this.config.grace_period_s * 1000) {
+      if (elapsed >= gracePeriod) {
         await this.triggerAlert(
           "client_down",
           "critical",
           elapsed / 1000,
-          this.config.grace_period_s
+          gracePeriod / 1000
         );
         // Record outage start
         this.currentOutageId = crypto.randomUUID();
@@ -758,7 +759,27 @@ export class ClientMonitor implements DurableObject {
           .bind(this.clientId)
           .first<{ name: string }>();
 
-        await dispatchAlert(this.env, {
+        const channels = new Set(this.config.down_alert_channels ?? ["telegram"]);
+
+        // Escalation: add channels if client has been down long enough
+        if (this.config.down_alert_escalation_enabled && type === "client_down") {
+          const downDuration = (Date.now() - (this.disconnectedAt ?? Date.now())) / 1000;
+          if (downDuration >= (this.config.down_alert_escalate_after_seconds ?? 600)) {
+            for (const ch of this.config.down_alert_escalate_channels ?? ["email"]) {
+              channels.add(ch);
+            }
+          }
+        }
+
+        // Scope env to only have credentials for enabled channels
+        const scopedEnv = {
+          ...this.env,
+          TELEGRAM_BOT_TOKEN: channels.has("telegram") ? this.env.TELEGRAM_BOT_TOKEN : "",
+          TELEGRAM_CHAT_ID: channels.has("telegram") ? this.env.TELEGRAM_CHAT_ID : "",
+          RESEND_API_KEY: channels.has("email") ? this.env.RESEND_API_KEY : "",
+        };
+
+        await dispatchAlert(scopedEnv, {
           alert_id: alertId,
           client_id: this.clientId,
           client_name: clientRow?.name,
