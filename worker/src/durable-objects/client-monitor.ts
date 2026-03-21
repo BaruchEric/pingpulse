@@ -116,8 +116,12 @@ export class ClientMonitor implements DurableObject {
     if (!this.disconnectedAt) {
       this.disconnectedAt = await this.state.storage.get<number>("disconnectedAt") ?? null;
     }
+    if (!this.currentOutageId) {
+      this.currentOutageId = await this.state.storage.get<string>("currentOutageId") ?? null;
+    }
     if (this.disconnectedAt) {
       await this.state.storage.delete("disconnectedAt");
+      await this.state.storage.delete("currentOutageId");
       await this.handleReconnect();
     }
 
@@ -309,8 +313,9 @@ export class ClientMonitor implements DurableObject {
           elapsed / 1000,
           gracePeriod / 1000
         );
-        // Record outage start
+        // Record outage start (persist ID for reconnect notification)
         this.currentOutageId = crypto.randomUUID();
+        await this.state.storage.put("currentOutageId", this.currentOutageId);
         await this.env.DB.prepare(
           "INSERT INTO outages (id, client_id, start_ts) VALUES (?, ?, ?)"
         )
