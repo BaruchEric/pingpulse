@@ -127,6 +127,9 @@ export class ClientMonitor implements DurableObject {
         : Promise.resolve(),
     ]);
 
+    // Set initial activity baseline for dead connection detection
+    await this.state.storage.put("lastClientActivity", Date.now());
+
     // Start ping alarm if not already running
     const currentAlarm = await this.state.storage.getAlarm();
     if (!currentAlarm) {
@@ -200,6 +203,9 @@ export class ClientMonitor implements DurableObject {
       }
       this.alarmEnsured = true;
     }
+
+    // Track last client activity durably (survives hibernation)
+    await this.state.storage.put("lastClientActivity", Date.now());
 
     try {
       const msg: WSMessage = JSON.parse(message);
@@ -312,15 +318,19 @@ export class ClientMonitor implements DurableObject {
     // Normal ping alarm — first resolve any timed-out pings
     this.resolveTimedOutPings();
 
-    // Detect dead connections: if too many consecutive pings timed out,
-    // force-close all sessions so handleSessionDrop fires the down alert
-    if (this.consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS && this.sessions.length > 0) {
-      console.log(`[${this.clientId}] ${this.consecutiveTimeouts} consecutive timeouts — closing dead sessions`);
-      for (const ws of this.sessions) {
-        try { ws.close(1001, "Dead connection detected"); } catch { /* already closed */ }
+    // Detect dead connections using durable storage (survives hibernation).
+    // If no message received from the client in MAX_CONSECUTIVE_TIMEOUTS * ping_interval,
+    // the connection is dead — force-close so handleSessionDrop fires the alert.
+    if (this.sessions.length > 0) {
+      const lastActivity = await this.state.storage.get<number>("lastClientActivity") ?? 0;
+      const deadThresholdMs = this.config.ping_interval_s * 1000 * MAX_CONSECUTIVE_TIMEOUTS;
+      if (lastActivity > 0 && Date.now() - lastActivity > deadThresholdMs) {
+        console.log(`[${this.clientId}] No client activity for ${Math.round((Date.now() - lastActivity) / 1000)}s — closing dead sessions`);
+        for (const ws of this.sessions) {
+          try { ws.close(1001, "Dead connection detected"); } catch { /* already closed */ }
+        }
+        return; // webSocketClose handler will set the disconnect alarm
       }
-      this.consecutiveTimeouts = 0;
-      return; // webSocketClose handler will set the disconnect alarm
     }
 
     if (this.sessions.length > 0) {
