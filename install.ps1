@@ -46,8 +46,8 @@ try {
         New-Item -ItemType Directory -Path $installDir -Force | Out-Null
     }
     Move-Item -Path (Join-Path $tmpDir "pingpulse.exe") -Destination $binPath -Force
-    $version = & $binPath --version 2>&1
-    Write-Host "Installed pingpulse ${version} to ${binPath}"
+    $version = (& $binPath --version 2>&1) -replace '^pingpulse\s*', ''
+    Write-Host "Installed pingpulse v${version} to ${binPath}"
 
     # --- Add to PATH if not present ---
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -82,13 +82,6 @@ try {
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to start daemon. Try 'pingpulse start --foreground' for details."
         exit 1
-    }
-
-    Write-Host "Starting pingpulse management agent..."
-    try {
-        & "$installDir\pingpulse.exe" agent --install
-    } catch {
-        Write-Host "Warning: Failed to install agent service. Local management via dashboard unavailable."
     }
 
     Write-Host ""
