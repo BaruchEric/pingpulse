@@ -45,12 +45,16 @@ pingpulse/
 +-- client/                     # Rust client daemon
 |   +-- src/
 |   |   +-- main.rs             # CLI entry point (register, start, stop, status, uninstall, agent)
-|   |   +-- daemon.rs           # Background daemon with WebSocket connection
-|   |   +-- speedtest.rs        # Download/upload speed test logic
+|   |   +-- websocket.rs        # WebSocket event loop, self-update, reconnect
+|   |   +-- speed_test.rs       # Download/upload speed test logic
 |   |   +-- agent.rs            # Local HTTP management API (port 9111)
 |   |   +-- service.rs          # OS service install (launchd/systemd/Windows)
 |   |   +-- config.rs           # Config file management
 |   |   +-- register.rs         # Token-based registration
+|   |   +-- messages.rs         # WebSocket message types (incoming/outgoing)
+|   |   +-- store.rs            # SQLite probe storage + sync
+|   |   +-- sync.rs             # Batch sync of probe results to server
+|   |   +-- probe.rs            # ICMP and HTTP probe engine
 |   |   +-- logging.rs          # Structured logging
 |   +-- Cargo.toml
 |
@@ -176,7 +180,7 @@ directory = "./dashboard/dist"
 not_found_handling = "single-page-application"
 
 [vars]
-LATEST_CLIENT_VERSION = "0.2.3"
+LATEST_CLIENT_VERSION = "0.3.2"
 ```
 
 ## Step 3: Set Secrets
@@ -296,7 +300,7 @@ irm https://raw.githubusercontent.com/BaruchEric/pingpulse/master/install.ps1 | 
 
 The install script will:
 1. Download the correct binary for your OS/architecture
-2. Install to `/usr/local/bin` (Unix) or `%LOCALAPPDATA%\pingpulse` (Windows)
+2. Install to `~/.pingpulse/bin/` (Unix) or `%LOCALAPPDATA%\pingpulse` (Windows)
 3. Prompt for client name and location
 4. Register with the server
 5. Start the daemon as a system service
@@ -306,7 +310,7 @@ The install script will:
 ```bash
 # Download from GitHub releases
 curl -L https://github.com/BaruchEric/pingpulse/releases/latest/download/pingpulse-darwin-arm64.tar.gz | tar xz
-sudo mv pingpulse /usr/local/bin/
+mkdir -p ~/.pingpulse/bin && mv pingpulse ~/.pingpulse/bin/
 
 # Register
 pingpulse register \
@@ -339,6 +343,25 @@ pingpulse agent       # Start local management API on port 9111
 | Linux | x86_64 | `pingpulse-linux-amd64.tar.gz` |
 | Linux | ARM64 | `pingpulse-linux-arm64.tar.gz` |
 | Windows | x86_64 | `pingpulse-windows-amd64.zip` |
+| Windows | ARM64 | `pingpulse-windows-arm64.zip` |
+
+## Self-Update
+
+Clients support unattended over-the-air updates triggered from the dashboard. When a newer `LATEST_CLIENT_VERSION` is set in `wrangler.toml` and deployed, the dashboard shows an "Update to X.Y.Z" button next to outdated clients.
+
+**How it works:**
+1. Admin clicks "Update" in the dashboard
+2. Server sends a `self_update` WebSocket message with the target version and GitHub repo
+3. Client downloads the correct platform binary from GitHub Releases (`client-v{version}`)
+4. Client extracts, ad-hoc code-signs (macOS), and replaces its own binary
+5. Client restarts via `launchctl kickstart` (macOS), `systemctl restart` (Linux), or process respawn (Windows)
+
+**Requirements:**
+- Client must be connected (status: Up) to receive the update command
+- A GitHub Release with the matching tag (`client-v{version}`) and platform artifacts must exist
+- Binary is installed in a user-writable location (`~/.pingpulse/bin/`) — no sudo required
+
+**macOS note:** The self-update deletes the old binary before writing the new one to create a fresh inode. This prevents macOS AppleSystemPolicy from killing the process due to stale code signature page hashes.
 
 ## Client Configuration
 
@@ -468,11 +491,17 @@ Client daemon connection. Requires `Authorization: Bearer <client_secret>` heade
 Messages from server:
 - `config_update` -- Updated client configuration
 - `ping` -- Ping request (client measures RTT and responds)
-- `trigger_speed_test` -- Server requests a speed test
+- `start_speed_test` -- Server requests a speed test
+- `self_update` -- Trigger unattended client binary update (version, repo)
+- `deregistered` -- Client has been deleted by admin
+- `server_logs` -- Server-side log entries pushed to client
 
 Messages from client:
 - `pong` -- Ping response with RTT measurement
+- `ping` -- Client-initiated ping
 - `speed_test_result` -- Speed test results (download/upload Mbps)
+- `probe_result` -- ICMP/HTTP probe measurement
+- `error` -- Error message
 
 ## Rate Limits
 
@@ -599,6 +628,13 @@ bun run test
 - Check Telegram bot token and chat ID are correct
 - The bot must have been messaged at least once before it can send to the chat
 
+## Self-update fails on macOS
+- Check crash reports: `ls ~/Library/Logs/DiagnosticReports/*pingpulse*`
+- If crash shows `SIGKILL (Code Signature Invalid)` / `Invalid Page`, the binary's code signature is stale
+- Fix: manually delete the binary and re-copy: `rm ~/.pingpulse/bin/pingpulse && cp /path/to/new/pingpulse ~/.pingpulse/bin/`
+- Ensure v0.3.1+ is installed — older versions used in-place copy which preserves stale inodes
+- Check for `com.apple.provenance` xattr: `xattr -l ~/.pingpulse/bin/pingpulse` (this is informational — provenance alone doesn't cause crashes)
+
 ## Speed tests timing out
 - Default full test uses 10MB payload -- may be too large for slow connections
 - Adjust `full_test_payload_bytes` and `probe_size_bytes` in dashboard client config
@@ -637,7 +673,7 @@ worker/src/api/*.ts                    # API endpoint handlers
 worker/dashboard/src/pages/*.tsx       # Dashboard pages
 worker/dashboard/src/components/*.tsx  # Reusable UI components
 client/src/main.rs                     # Client CLI and subcommands
-client/src/daemon.rs                   # WebSocket client logic
+client/src/websocket.rs                # WebSocket event loop, self-update, reconnect
 ```
 
 ### 3. Development Commands
