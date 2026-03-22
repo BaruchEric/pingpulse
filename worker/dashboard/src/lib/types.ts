@@ -28,6 +28,10 @@ export interface ClientConfig {
   down_alert_escalation_enabled: boolean;
   down_alert_escalate_after_seconds: number;
   down_alert_escalate_channels: string[];
+
+  // Health report config
+  report_schedule?: "daily" | "6h" | "weekly" | "off";
+  report_channels?: string[];
 }
 
 export interface ClientStats {
@@ -112,4 +116,8 @@ export interface Alert {
   value: number;
   threshold: number;
   timestamp: string;
+  /** 1 = delivered, 0 = not attempted, -1 = failed */
+  delivered_email: number;
+  /** 1 = delivered, 0 = not attempted, -1 = failed */
+  delivered_telegram: number;
 }
