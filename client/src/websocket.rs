@@ -680,6 +680,7 @@ async fn self_update(
         std::process::exit(0);
     }
 
+    #[cfg(not(target_os = "windows"))]
     Ok(())
 }
 
