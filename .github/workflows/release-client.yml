@@ -59,6 +59,10 @@ jobs:
             os: macos-latest
             name: pingpulse-darwin-arm64
             cross: false
+          - target: x86_64-apple-darwin
+            os: macos-13
+            name: pingpulse-darwin-amd64
+            cross: false
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             name: pingpulse-linux-amd64
@@ -148,6 +152,7 @@ jobs:
           tag_name: ${{ steps.resolve.outputs.tag }}
           files: |
             pingpulse-darwin-arm64/pingpulse-darwin-arm64.tar.gz
+            pingpulse-darwin-amd64/pingpulse-darwin-amd64.tar.gz
             pingpulse-linux-amd64/pingpulse-linux-amd64.tar.gz
             pingpulse-linux-arm64/pingpulse-linux-arm64.tar.gz
             pingpulse-windows-amd64/pingpulse-windows-amd64.zip
