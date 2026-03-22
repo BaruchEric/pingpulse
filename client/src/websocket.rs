@@ -611,6 +611,19 @@ async fn self_update(
     // Replace the current binary
     #[cfg(not(target_os = "windows"))]
     {
+        // Ad-hoc sign in temp dir first (codesign fails on some filesystems like /usr/local/bin)
+        #[cfg(target_os = "macos")]
+        {
+            let sign_status = std::process::Command::new("codesign")
+                .args(["-s", "-", "-f", new_binary.to_str().unwrap()])
+                .status();
+            if let Ok(s) = sign_status {
+                if !s.success() {
+                    warn!(event = "codesign_failed", path = %new_binary.display());
+                }
+            }
+        }
+
         // On Unix, we can overwrite the running binary (kernel keeps inode alive)
         // Try direct copy first, fall back to sudo if permission denied
         if std::fs::copy(&new_binary, &current_exe).is_err() {
