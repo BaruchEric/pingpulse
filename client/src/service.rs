@@ -51,7 +51,11 @@ pub fn uninstall() {
     // 4. Remove the binary — both the current exe and the known install path
     let current = std::env::current_exe().ok();
     #[cfg(not(target_os = "windows"))]
-    let install_path = std::path::PathBuf::from("/usr/local/bin/pingpulse");
+    let install_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".pingpulse")
+        .join("bin")
+        .join("pingpulse");
     #[cfg(target_os = "windows")]
     let install_path = {
         let mut p = dirs::data_local_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
@@ -60,7 +64,12 @@ pub fn uninstall() {
         p
     };
 
-    let paths: Vec<&std::path::Path> = [current.as_deref(), Some(install_path.as_path())]
+    #[cfg(not(target_os = "windows"))]
+    let legacy_path = std::path::PathBuf::from("/usr/local/bin/pingpulse");
+    #[cfg(target_os = "windows")]
+    let legacy_path = install_path.clone();
+
+    let paths: Vec<&std::path::Path> = [current.as_deref(), Some(install_path.as_path()), Some(legacy_path.as_path())]
         .into_iter()
         .flatten()
         .collect();

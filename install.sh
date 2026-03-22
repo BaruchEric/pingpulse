@@ -4,24 +4,30 @@ set -euo pipefail
 REPO="BaruchEric/pingpulse"
 
 usage() {
-  echo "Usage: install.sh --token TOKEN --server SERVER_URL"
+  echo "Usage: install.sh --token TOKEN --server SERVER_URL [--name NAME] [--location LOCATION]"
   echo ""
   echo "Downloads, registers, and starts the pingpulse client daemon."
   echo ""
   echo "Options:"
-  echo "  --token   Registration token (required, from dashboard)"
-  echo "  --server  Server URL (required, e.g. https://pingpulse.example.com)"
+  echo "  --token     Registration token (required, from dashboard)"
+  echo "  --server    Server URL (required, e.g. https://pingpulse.example.com)"
+  echo "  --name      Client name (prompted interactively if omitted)"
+  echo "  --location  Client location (prompted interactively if omitted)"
   exit 1
 }
 
 # --- Parse arguments ---
 TOKEN=""
 SERVER=""
+NAME=""
+LOCATION=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --token)  TOKEN="$2"; shift 2 ;;
-    --server) SERVER="$2"; shift 2 ;;
-    *)        usage ;;
+    --token)    TOKEN="$2"; shift 2 ;;
+    --server)   SERVER="$2"; shift 2 ;;
+    --name)     NAME="$2"; shift 2 ;;
+    --location) LOCATION="$2"; shift 2 ;;
+    *)          usage ;;
   esac
 done
 
@@ -72,22 +78,52 @@ fi
 echo "Extracting..."
 tar -xzf "${WORK_DIR}/${ARTIFACT}" -C "$WORK_DIR"
 
-# --- Install binary ---
-INSTALL_DIR="/usr/local/bin"
-if [[ -w "$INSTALL_DIR" ]]; then
-  mv "${WORK_DIR}/pingpulse" "${INSTALL_DIR}/pingpulse"
-else
-  echo "Installing to ${INSTALL_DIR} (requires sudo)..."
-  sudo mv "${WORK_DIR}/pingpulse" "${INSTALL_DIR}/pingpulse"
+# --- Install binary to user-writable location ---
+INSTALL_DIR="$HOME/.pingpulse/bin"
+mkdir -p "$INSTALL_DIR"
+
+# Sign before copying (macOS rejects unsigned binaries)
+if [[ "$OS" == "darwin" ]]; then
+  codesign -s - -f "${WORK_DIR}/pingpulse" 2>/dev/null || true
 fi
+
+mv "${WORK_DIR}/pingpulse" "${INSTALL_DIR}/pingpulse"
 chmod +x "${INSTALL_DIR}/pingpulse"
+
+# --- Migrate from legacy /usr/local/bin install ---
+if [[ -f "/usr/local/bin/pingpulse" ]]; then
+  echo "Removing legacy binary from /usr/local/bin..."
+  rm -f "/usr/local/bin/pingpulse" 2>/dev/null || sudo rm -f "/usr/local/bin/pingpulse" 2>/dev/null || true
+fi
+
+# --- Add to PATH if not present ---
+if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
+  SHELL_NAME="$(basename "$SHELL")"
+  case "$SHELL_NAME" in
+    zsh)  PROFILE="$HOME/.zshrc" ;;
+    bash) PROFILE="$HOME/.bashrc" ;;
+    *)    PROFILE="$HOME/.profile" ;;
+  esac
+  if ! grep -qF "$INSTALL_DIR" "$PROFILE" 2>/dev/null; then
+    echo "" >> "$PROFILE"
+    echo "# PingPulse" >> "$PROFILE"
+    echo "export PATH=\"${INSTALL_DIR}:\$PATH\"" >> "$PROFILE"
+    echo "Added ${INSTALL_DIR} to PATH in ${PROFILE}"
+  fi
+  export PATH="${INSTALL_DIR}:$PATH"
+fi
+
 VERSION=$("${INSTALL_DIR}/pingpulse" --version 2>&1 | sed 's/^pingpulse *//')
 echo "Installed pingpulse v${VERSION} to ${INSTALL_DIR}/pingpulse"
 
-# --- Prompt for name and location (read from /dev/tty since stdin is piped) ---
-echo ""
-read -rp "Enter client name: " NAME < /dev/tty
-read -rp "Enter location: " LOCATION < /dev/tty
+# --- Prompt for name and location if not provided ---
+if [[ -z "$NAME" ]]; then
+  echo ""
+  read -rp "Enter client name: " NAME < /dev/tty
+fi
+if [[ -z "$LOCATION" ]]; then
+  read -rp "Enter location: " LOCATION < /dev/tty
+fi
 
 if [[ -z "$NAME" || -z "$LOCATION" ]]; then
   echo "Error: Name and location are required."
@@ -98,7 +134,9 @@ fi
 if [[ -f "$HOME/.pingpulse/config.toml" ]]; then
   echo "Existing PingPulse installation detected — cleaning up..."
   pingpulse stop 2>/dev/null || true
-  rm -rf "$HOME/.pingpulse"
+  # Keep the bin directory, only remove config/data
+  find "$HOME/.pingpulse" -maxdepth 1 -not -name bin -not -name .pingpulse -delete 2>/dev/null || true
+  rm -rf "$HOME/.pingpulse/logs" "$HOME/.pingpulse/data" 2>/dev/null || true
   echo "Old installation removed."
 fi
 

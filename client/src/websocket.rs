@@ -611,9 +611,14 @@ async fn self_update(
     // Replace the current binary
     #[cfg(not(target_os = "windows"))]
     {
-        // Ad-hoc sign in temp dir first (codesign fails on some filesystems like /usr/local/bin)
         #[cfg(target_os = "macos")]
         {
+            // Clear quarantine xattr and ad-hoc sign in temp dir
+            // (codesign fails on some filesystem locations like /usr/local/bin)
+            std::process::Command::new("xattr")
+                .args(["-cr", new_binary.to_str().unwrap()])
+                .status()
+                .ok();
             let sign_status = std::process::Command::new("codesign")
                 .args(["-s", "-", "-f", new_binary.to_str().unwrap()])
                 .status();
@@ -624,16 +629,10 @@ async fn self_update(
             }
         }
 
-        // On Unix, we can overwrite the running binary (kernel keeps inode alive)
-        // Try direct copy first, fall back to sudo if permission denied
-        if std::fs::copy(&new_binary, &current_exe).is_err() {
-            let status = std::process::Command::new("sudo")
-                .args(["cp", new_binary.to_str().unwrap(), current_exe.to_str().unwrap()])
-                .status()?;
-            if !status.success() {
-                anyhow::bail!("Failed to replace binary (even with sudo)");
-            }
-        }
+        // Binary should be in a user-writable location (~/.pingpulse/bin/)
+        std::fs::copy(&new_binary, &current_exe)
+            .map_err(|e| anyhow::anyhow!("Failed to replace binary at {}: {e}", current_exe.display()))?;
+
         // Ensure executable
         std::process::Command::new("chmod")
             .args(["+x", current_exe.to_str().unwrap()])

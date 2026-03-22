@@ -4,7 +4,13 @@ param(
     [string]$token,
 
     [Parameter(Mandatory=$true)]
-    [string]$server
+    [string]$server,
+
+    [Parameter(Mandatory=$false)]
+    [string]$name,
+
+    [Parameter(Mandatory=$false)]
+    [string]$location
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,10 +63,14 @@ try {
         Write-Host "Added ${installDir} to user PATH"
     }
 
-    # --- Prompt for name and location ---
-    Write-Host ""
-    $name = Read-Host "Enter client name"
-    $location = Read-Host "Enter location"
+    # --- Prompt for name and location if not provided ---
+    if ([string]::IsNullOrWhiteSpace($name)) {
+        Write-Host ""
+        $name = Read-Host "Enter client name"
+    }
+    if ([string]::IsNullOrWhiteSpace($location)) {
+        $location = Read-Host "Enter location"
+    }
 
     if ([string]::IsNullOrWhiteSpace($name) -or [string]::IsNullOrWhiteSpace($location)) {
         Write-Error "Name and location are required."
