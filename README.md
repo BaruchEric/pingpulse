@@ -180,7 +180,7 @@ directory = "./dashboard/dist"
 not_found_handling = "single-page-application"
 
 [vars]
-LATEST_CLIENT_VERSION = "0.3.2"
+LATEST_CLIENT_VERSION = "1.0.0"
 ```
 
 ## Step 3: Set Secrets
