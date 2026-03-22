@@ -629,7 +629,14 @@ async fn self_update(
             }
         }
 
-        // Binary should be in a user-writable location (~/.pingpulse/bin/)
+        // Remove the old binary first so we get a fresh inode.
+        // On macOS, `copy()` overwrites in-place which preserves the inode
+        // and its sticky `com.apple.provenance` xattr — that causes
+        // AppleSystemPolicy to SIGKILL the new binary with
+        // "Code Signature Invalid". Deleting first creates a new inode
+        // without provenance. Safe on Unix: the kernel keeps the running
+        // binary's inode alive until the process exits.
+        let _ = std::fs::remove_file(&current_exe);
         std::fs::copy(&new_binary, &current_exe)
             .map_err(|e| anyhow::anyhow!("Failed to replace binary at {}: {e}", current_exe.display()))?;
 
