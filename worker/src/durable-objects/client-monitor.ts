@@ -339,7 +339,7 @@ export class ClientMonitor implements DurableObject {
       const lastActivity = await this.state.storage.get<number>("lastClientActivity") ?? 0;
       const deadThresholdMs = this.config.ping_interval_s * 1000 * MAX_CONSECUTIVE_TIMEOUTS;
       if (lastActivity > 0 && Date.now() - lastActivity > deadThresholdMs) {
-        console.log(`[${this.clientId}] No client activity for ${Math.round((Date.now() - lastActivity) / 1000)}s — closing dead sessions`);
+        console.warn(`[${this.clientId}] No client activity for ${Math.round((Date.now() - lastActivity) / 1000)}s — closing dead sessions`);
         for (const ws of this.sessions) {
           try { ws.close(1001, "Dead connection detected"); } catch { /* already closed */ }
         }

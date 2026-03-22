@@ -143,4 +143,5 @@ export type WSMessage =
   | { type: "deregistered"; reason: string }
   | { type: "server_logs"; entries: ServerLogEntry[] }
   | { type: "update_available"; latest_version: string; download_url: string }
-  | { type: "probe_result"; session_id: string; record: ProbeRecord };
+  | { type: "probe_result"; session_id: string; record: ProbeRecord }
+  | { type: "self_update"; version: string; repo: string };
