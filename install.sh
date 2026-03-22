@@ -81,7 +81,8 @@ else
   sudo mv "${WORK_DIR}/pingpulse" "${INSTALL_DIR}/pingpulse"
 fi
 chmod +x "${INSTALL_DIR}/pingpulse"
-echo "Installed pingpulse to ${INSTALL_DIR}/pingpulse"
+VERSION=$("${INSTALL_DIR}/pingpulse" --version 2>&1 | sed 's/^pingpulse *//')
+echo "Installed pingpulse v${VERSION} to ${INSTALL_DIR}/pingpulse"
 
 # --- Prompt for name and location (read from /dev/tty since stdin is piped) ---
 echo ""
