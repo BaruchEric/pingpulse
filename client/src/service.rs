@@ -266,6 +266,20 @@ fn install_launchd(binary_path: &str) -> Result<()> {
         );
     }
 
+    // `launchctl load` with RunAtLoad doesn't always start the process
+    // (e.g. if the service was previously registered). Force-start it.
+    let uid = Command::new("id")
+        .arg("-u")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let _ = Command::new("launchctl")
+        .args(["kickstart", &format!("gui/{uid}/{PLIST_LABEL}")])
+        .output();
+
     info!(event = "service_installed", method = "launchd");
     println!("PingPulse service installed and started.");
     Ok(())
@@ -305,7 +319,15 @@ fn status_launchd() -> Result<bool> {
         .output()
         .context("Failed to run launchctl")?;
 
-    Ok(output.status.success())
+    if !output.status.success() {
+        return Ok(false);
+    }
+
+    // `launchctl list <label>` succeeds when the service is registered, even
+    // if the process isn't running. The output contains a "PID" key only when
+    // a process is actually alive.
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout.contains("\"PID\""))
 }
 
 // --- Linux (systemd) ---

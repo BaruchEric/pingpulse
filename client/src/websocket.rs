@@ -553,6 +553,7 @@ async fn handle_message(
 
 // --- Self-update ---
 
+#[allow(clippy::too_many_lines)]
 async fn self_update(
     http: &reqwest::Client,
     version: &str,
