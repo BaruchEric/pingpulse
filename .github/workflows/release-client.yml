@@ -60,7 +60,7 @@ jobs:
             name: pingpulse-darwin-arm64
             cross: false
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-latest
             name: pingpulse-darwin-amd64
             cross: false
           - target: x86_64-unknown-linux-gnu
