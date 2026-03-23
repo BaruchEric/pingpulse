@@ -22,7 +22,7 @@ jobs:
       tag: ${{ steps.check.outputs.tag }}
       released: ${{ steps.check.outputs.released }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Read version and check tag/release
         id: check
@@ -82,7 +82,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -132,7 +132,7 @@ jobs:
     if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Resolve tag
         id: resolve
@@ -158,3 +158,13 @@ jobs:
             pingpulse-windows-amd64/pingpulse-windows-amd64.zip
             pingpulse-windows-arm64/pingpulse-windows-arm64.zip
           generate_release_notes: true
+
+      - name: Update LATEST_CLIENT_VERSION in wrangler.toml
+        run: |
+          version="${{ steps.resolve.outputs.tag }}"
+          version="${version#client-v}"
+          sed -i "s/^LATEST_CLIENT_VERSION = .*/LATEST_CLIENT_VERSION = \"${version}\"/" worker/wrangler.toml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add worker/wrangler.toml
+          git diff --cached --quiet || git commit -m "chore: bump LATEST_CLIENT_VERSION to ${version}" && git push origin HEAD:master
