@@ -3,6 +3,7 @@ import { ClientMonitor } from "@/durable-objects/client-monitor";
 import { archiveOldRecords } from "@/services/archiver";
 import { runAnalysis } from "@/services/analysis-queries";
 import { formatTelegramReport, formatEmailReport } from "@/services/health-report";
+import { sendTelegramMessage, sendResendEmail } from "@/services/notify";
 
 export { ClientMonitor };
 
@@ -72,52 +73,38 @@ async function generateHealthReports(env: Env): Promise<void> {
     .bind(new Date(Date.now() - 7 * 86400_000).toISOString())
     .all<{ id: string; name: string; config_json: string }>();
 
-  for (const client of clients ?? []) {
-    const config = JSON.parse(client.config_json || "{}");
-    const schedule: string = config.report_schedule ?? "daily";
-    const channels: string[] = config.report_channels ?? ["telegram", "email"];
+  await Promise.allSettled(
+    (clients ?? []).map(async (client) => {
+      const config = JSON.parse(client.config_json || "{}");
+      const schedule: string = config.report_schedule ?? "daily";
+      const channels: ("telegram" | "email")[] = config.report_channels ?? ["telegram", "email"];
 
-    if (schedule === "off") continue;
-    if (schedule === "daily" && utcHour !== 0) continue;
-    if (schedule === "weekly" && (utcHour !== 0 || utcDay !== 1)) continue;
-    // "6h" runs every cron tick — no filter needed
+      if (schedule === "off") return;
+      if (schedule === "daily" && utcHour !== 0) return;
+      if (schedule === "weekly" && (utcHour !== 0 || utcDay !== 1)) return;
+      // "6h" runs every cron tick — no filter needed
 
-    const windowMs = schedule === "weekly" ? 7 * 86400_000 : schedule === "6h" ? 6 * 3600_000 : 86400_000;
-    const from = new Date(Date.now() - windowMs).toISOString();
-    const to = now.toISOString();
+      const windowMs = schedule === "weekly" ? 7 * 86400_000 : schedule === "6h" ? 6 * 3600_000 : 86400_000;
+      const from = new Date(Date.now() - windowMs).toISOString();
+      const to = now.toISOString();
 
-    try {
-      const data = await runAnalysis(env.DB, client.id, from, to);
+      try {
+        const data = await runAnalysis(env.DB, client.id, from, to);
 
-      if (channels.includes("telegram") && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
-        const message = formatTelegramReport(client.name, from, to, data);
-        await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: message }),
-        }).catch((err) => console.error(`[health-report] Telegram failed for ${client.id}:`, err));
+        if (channels.includes("telegram")) {
+          const message = formatTelegramReport(client.name, from, to, data);
+          await sendTelegramMessage(env, message);
+        }
+
+        if (channels.includes("email")) {
+          const html = formatEmailReport(client.name, from, to, data);
+          await sendResendEmail(env, `[PingPulse] Health Report — ${client.name}`, { html });
+        }
+      } catch (err) {
+        console.error(`[health-report] Failed for client ${client.id}:`, err);
       }
-
-      if (channels.includes("email") && env.RESEND_API_KEY) {
-        const html = formatEmailReport(client.name, from, to, data);
-        await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${env.RESEND_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: env.ALERT_FROM_EMAIL || "PingPulse <alerts@ping.beric.ca>",
-            to: [env.ALERT_TO_EMAIL || "admin@beric.ca"],
-            subject: `[PingPulse] Health Report — ${client.name}`,
-            html,
-          }),
-        }).catch((err) => console.error(`[health-report] Email failed for ${client.id}:`, err));
-      }
-    } catch (err) {
-      console.error(`[health-report] Failed for client ${client.id}:`, err);
-    }
-  }
+    })
+  );
 }
 
 export default {

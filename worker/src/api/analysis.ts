@@ -3,6 +3,7 @@ import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
 import { runAnalysis } from "@/services/analysis-queries";
 import { formatTelegramReport, formatEmailReport } from "@/services/health-report";
+import { sendTelegramMessage, sendResendEmail } from "@/services/notify";
 import type { AnalysisResponse } from "@/types";
 
 export const analysisRoutes = new Hono<AppEnv>();
@@ -65,49 +66,12 @@ analysisRoutes.post("/:id/report", async (c) => {
 
   if (send === "telegram" || send === "all") {
     const message = formatTelegramReport(clientName, from, to, raw);
-    if (c.env.TELEGRAM_BOT_TOKEN && c.env.TELEGRAM_CHAT_ID) {
-      try {
-        const res = await fetch(
-          `https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: c.env.TELEGRAM_CHAT_ID, text: message }),
-          }
-        );
-        sent.telegram = res.ok;
-      } catch {
-        sent.telegram = false;
-      }
-    } else {
-      sent.telegram = false;
-    }
+    sent.telegram = await sendTelegramMessage(c.env, message);
   }
 
   if (send === "email" || send === "all") {
-    if (c.env.RESEND_API_KEY) {
-      const html = formatEmailReport(clientName, from, to, raw);
-      try {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: c.env.ALERT_FROM_EMAIL || "PingPulse <alerts@ping.beric.ca>",
-            to: [c.env.ALERT_TO_EMAIL || "admin@beric.ca"],
-            subject: `[PingPulse] Health Report — ${clientName}`,
-            html,
-          }),
-        });
-        sent.email = res.ok;
-      } catch {
-        sent.email = false;
-      }
-    } else {
-      sent.email = false;
-    }
+    const html = formatEmailReport(clientName, from, to, raw);
+    sent.email = await sendResendEmail(c.env, `[PingPulse] Health Report — ${clientName}`, { html });
   }
 
   return c.json({ report: raw, sent });

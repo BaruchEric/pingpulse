@@ -36,13 +36,11 @@ export function AlertRow({ alert }: { alert: Alert }) {
 
   return (
     <div className={`flex items-center justify-between rounded-md border px-4 py-3 ${style}`}>
-      <div className="flex items-center gap-3">
-        <div>
-          <span className="text-sm font-medium capitalize">{label}</span>
-          <span className="ml-3 text-xs opacity-60">
-            {alert.value.toFixed(1)} / {alert.threshold.toFixed(1)}
-          </span>
-        </div>
+      <div>
+        <span className="text-sm font-medium capitalize">{label}</span>
+        <span className="ml-3 text-xs opacity-60">
+          {alert.value.toFixed(1)} / {alert.threshold.toFixed(1)}
+        </span>
       </div>
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 text-zinc-400">

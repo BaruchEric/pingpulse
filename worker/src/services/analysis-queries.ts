@@ -39,7 +39,7 @@ export function buildAnalysisQueries(
     },
     {
       key: "direction_asymmetry",
-      sql: `SELECT strftime('%H:00', datetime(timestamp, 'auto')) as hour, direction, AVG(rtt_ms) as avg_rtt, COUNT(*) as count
+      sql: `SELECT strftime('%H:00', timestamp) as hour, direction, AVG(rtt_ms) as avg_rtt, COUNT(*) as count
             FROM ping_results WHERE client_id = ? AND timestamp BETWEEN ? AND ? GROUP BY hour, direction ORDER BY hour, direction`,
       params: [clientId, from, to],
     },

@@ -31,7 +31,7 @@ export interface ClientConfig {
 
   // Health report config
   report_schedule?: "daily" | "6h" | "weekly" | "off";
-  report_channels?: string[];
+  report_channels?: ("telegram" | "email")[];
 }
 
 export interface ClientStats {

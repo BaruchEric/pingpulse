@@ -111,15 +111,16 @@ export function useLogs(clientId: string, page: number, perPage = 50) {
   );
 }
 
-export function useAnalysis(clientId: string, range: TimeRange) {
+export function useAnalysis(clientId: string, range: TimeRange, enabled = true) {
   // No auto-poll — analysis data is historical. Fetch once on mount / range change.
   return usePolling(
     () => {
+      if (!enabled) return Promise.resolve(null);
       const { from, to } = getTimeRange(range);
       return api.getAnalysis(clientId, from, to);
     },
     0,  // intervalMs = 0 disables polling
-    [clientId, range]
+    [clientId, range, enabled]
   );
 }
 

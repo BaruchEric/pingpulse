@@ -34,7 +34,7 @@ export function ClientDetail() {
   const [tab, setTab] = useState<"overview" | "analysis">(
     window.location.hash === "#analysis" ? "analysis" : "overview"
   );
-  const { data: analysis, loading: analysisLoading, refresh: refreshAnalysis } = useAnalysis(clientId, range);
+  const { data: analysis, loading: analysisLoading, refresh: refreshAnalysis } = useAnalysis(clientId, range, tab === "analysis");
   const [showReportModal, setShowReportModal] = useState(false);
 
   // Ping logs
