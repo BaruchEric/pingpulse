@@ -107,10 +107,13 @@ export interface PingResult {
   status: "ok" | "timeout" | "error";
 }
 
+export type SpeedTestTarget = "worker" | "edge";
+
 export interface SpeedTestResult {
   client_id: string;
   timestamp: string;
   type: "probe" | "full";
+  target: SpeedTestTarget;
   download_mbps: number;
   upload_mbps: number;
   payload_bytes: number;
@@ -176,6 +179,7 @@ export interface AnalysisResponse {
   }[];
   speed_test_stats: {
     type: string;
+    target: string;
     count: number;
     avg_dl: number;
     min_dl: number;
@@ -211,6 +215,7 @@ export interface AnalysisResponse {
   }[];
   full_speed_tests: {
     timestamp: string;
+    target: string;
     download_mbps: number;
     upload_mbps: number;
     duration_ms: number;
@@ -245,7 +250,7 @@ export type WSMessage =
   | { type: "ping"; id: string; ts: number; payload?: ArrayBuffer }
   | { type: "pong"; id: string; ts: number; client_ts: number }
   | { type: "config_update"; config: ClientConfig }
-  | { type: "start_speed_test"; test_type: "probe" | "full" }
+  | { type: "start_speed_test"; test_type: "probe" | "full"; target: SpeedTestTarget }
   | { type: "speed_test_result"; result: SpeedTestResult }
   | { type: "error"; message: string }
   | { type: "deregistered"; reason: string }

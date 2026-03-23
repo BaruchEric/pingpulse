@@ -9,6 +9,7 @@ export function SpeedTestStats({ stats }: { stats: AnalysisResponse["speed_test_
         <thead>
           <tr className="text-left text-xs text-zinc-400 border-b border-zinc-800">
             <th className="py-2 pr-3">Type</th>
+            <th className="py-2 pr-3">Target</th>
             <th className="py-2 pr-3 text-right">Count</th>
             <th className="py-2 pr-3 text-right">Avg DL</th>
             <th className="py-2 pr-3 text-right">Max DL</th>
@@ -20,6 +21,7 @@ export function SpeedTestStats({ stats }: { stats: AnalysisResponse["speed_test_
           {stats.map((s, i) => (
             <tr key={i} className="border-b border-zinc-800/50">
               <td className="py-2 pr-3 font-medium text-zinc-300">{s.type}</td>
+              <td className="py-2 pr-3 text-zinc-400">{s.target ?? "worker"}</td>
               <td className="py-2 pr-3 text-right font-mono text-zinc-300">{s.count}</td>
               <td className="py-2 pr-3 text-right font-mono text-zinc-300">{s.avg_dl.toFixed(1)} Mbps</td>
               <td className="py-2 pr-3 text-right font-mono text-zinc-400">{s.max_dl.toFixed(1)}</td>

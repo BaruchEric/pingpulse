@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 use reqwest::Client;
 use tracing::info;
 
-use crate::messages::{SpeedTestResult, SpeedTestType};
+use crate::messages::{SpeedTestResult, SpeedTestTarget, SpeedTestType};
+
+const EDGE_BASE: &str = "https://speed.cloudflare.com";
 
 #[allow(clippy::cast_precision_loss)]
 fn bytes_to_mbps(bytes: u64, elapsed: Duration) -> f64 {
@@ -15,13 +17,32 @@ fn log_result(result: &SpeedTestResult) {
         SpeedTestType::Probe => "probe",
         SpeedTestType::Full => "full",
     };
+    let target = match result.target {
+        SpeedTestTarget::Worker => "worker",
+        SpeedTestTarget::Edge => "edge",
+    };
     info!(
         event = "speed_test_complete",
         test_type,
+        target,
         download_mbps = result.download_mbps,
         upload_mbps = result.upload_mbps,
         duration_ms = result.duration_ms,
     );
+}
+
+fn download_url(base_url: &str, target: SpeedTestTarget, size: u64) -> String {
+    match target {
+        SpeedTestTarget::Worker => format!("{base_url}/api/speedtest/download?size={size}"),
+        SpeedTestTarget::Edge => format!("{EDGE_BASE}/__down?bytes={size}"),
+    }
+}
+
+fn upload_url(base_url: &str, target: SpeedTestTarget) -> String {
+    match target {
+        SpeedTestTarget::Worker => format!("{base_url}/api/speedtest/upload"),
+        SpeedTestTarget::Edge => format!("{EDGE_BASE}/__up"),
+    }
 }
 
 /// Run a probe speed test: single sequential download + upload.
@@ -30,29 +51,31 @@ pub async fn run_probe(
     base_url: &str,
     client_id: &str,
     payload_size: u64,
+    target: SpeedTestTarget,
 ) -> anyhow::Result<SpeedTestResult> {
     info!(
         event = "speed_test_start",
         test_type = "probe",
+        target = ?target,
         payload_bytes = payload_size
     );
 
     let start = Instant::now();
 
     // Download
-    let download_url = format!("{base_url}/api/speedtest/download?size={payload_size}");
+    let dl_url = download_url(base_url, target, payload_size);
     let dl_start = Instant::now();
-    let dl_bytes = http.get(&download_url).send().await?.bytes().await?;
+    let dl_bytes = http.get(&dl_url).send().await?.bytes().await?;
     let dl_elapsed = dl_start.elapsed();
     #[allow(clippy::cast_possible_truncation)]
     let download_mbps = bytes_to_mbps(dl_bytes.len() as u64, dl_elapsed);
 
     // Upload — allocate before starting the timer
-    let upload_url = format!("{base_url}/api/speedtest/upload");
+    let ul_url = upload_url(base_url, target);
     #[allow(clippy::cast_possible_truncation)]
     let payload = vec![0u8; payload_size as usize];
     let ul_start = Instant::now();
-    http.post(&upload_url).body(payload).send().await?;
+    http.post(&ul_url).body(payload).send().await?;
     let ul_elapsed = ul_start.elapsed();
     let upload_mbps = bytes_to_mbps(payload_size, ul_elapsed);
 
@@ -62,6 +85,7 @@ pub async fn run_probe(
         client_id: client_id.to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
         test_type: SpeedTestType::Probe,
+        target,
         download_mbps,
         upload_mbps,
         payload_bytes: payload_size,
@@ -79,6 +103,7 @@ pub async fn run_full(
     base_url: &str,
     client_id: &str,
     total_payload: u64,
+    target: SpeedTestTarget,
 ) -> anyhow::Result<SpeedTestResult> {
     const STREAMS: u64 = 4;
     let chunk_size = total_payload / STREAMS;
@@ -86,18 +111,19 @@ pub async fn run_full(
     info!(
         event = "speed_test_start",
         test_type = "full",
+        target = ?target,
         payload_bytes = total_payload
     );
 
     let start = Instant::now();
 
     // Parallel download
-    let download_url = format!("{base_url}/api/speedtest/download?size={chunk_size}");
+    let dl_url = download_url(base_url, target, chunk_size);
     let dl_start = Instant::now();
     let dl_tasks: Vec<_> = (0..STREAMS)
         .map(|_| {
             let http = http.clone();
-            let url = download_url.clone();
+            let url = dl_url.clone();
             tokio::spawn(async move {
                 let resp = http.get(&url).send().await?;
                 let bytes = resp.bytes().await?;
@@ -115,12 +141,12 @@ pub async fn run_full(
     let download_mbps = bytes_to_mbps(total_dl_bytes as u64, dl_elapsed);
 
     // Parallel upload
-    let upload_url = format!("{base_url}/api/speedtest/upload");
+    let ul_url = upload_url(base_url, target);
     let ul_start = Instant::now();
     let ul_tasks: Vec<_> = (0..STREAMS)
         .map(|_| {
             let http = http.clone();
-            let url = upload_url.clone();
+            let url = ul_url.clone();
             #[allow(clippy::cast_possible_truncation)]
             let payload = vec![0u8; chunk_size as usize];
             tokio::spawn(async move {
@@ -142,6 +168,7 @@ pub async fn run_full(
         client_id: client_id.to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
         test_type: SpeedTestType::Full,
+        target,
         download_mbps,
         upload_mbps,
         payload_bytes: total_payload,

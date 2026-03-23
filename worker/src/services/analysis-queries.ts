@@ -45,9 +45,9 @@ export function buildAnalysisQueries(
     },
     {
       key: "speed_test_stats",
-      sql: `SELECT type, COUNT(*) as count, AVG(download_mbps) as avg_dl, MIN(download_mbps) as min_dl, MAX(download_mbps) as max_dl,
+      sql: `SELECT type, target, COUNT(*) as count, AVG(download_mbps) as avg_dl, MIN(download_mbps) as min_dl, MAX(download_mbps) as max_dl,
             AVG(upload_mbps) as avg_ul, MIN(upload_mbps) as min_ul, MAX(upload_mbps) as max_ul
-            FROM speed_tests WHERE client_id = ? AND timestamp BETWEEN ? AND ? GROUP BY type`,
+            FROM speed_tests WHERE client_id = ? AND timestamp BETWEEN ? AND ? GROUP BY type, target`,
       params: [clientId, from, to],
     },
     {
@@ -100,7 +100,7 @@ export function buildAnalysisQueries(
     },
     {
       key: "full_speed_tests",
-      sql: `SELECT timestamp, download_mbps, upload_mbps, duration_ms FROM speed_tests
+      sql: `SELECT timestamp, target, download_mbps, upload_mbps, duration_ms FROM speed_tests
             WHERE client_id = ? AND type = 'full' AND timestamp BETWEEN ? AND ?
             ORDER BY timestamp`,
       params: [clientId, from, to],

@@ -11,12 +11,27 @@ pub enum SpeedTestType {
     Full,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeedTestTarget {
+    Worker,
+    Edge,
+}
+
+impl Default for SpeedTestTarget {
+    fn default() -> Self {
+        Self::Worker
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpeedTestResult {
     pub client_id: String,
     pub timestamp: String,
     #[serde(rename = "type")]
     pub test_type: SpeedTestType,
+    #[serde(default)]
+    pub target: SpeedTestTarget,
     pub download_mbps: f64,
     pub upload_mbps: f64,
     pub payload_bytes: u64,
@@ -62,6 +77,8 @@ pub enum IncomingMessage {
     },
     StartSpeedTest {
         test_type: SpeedTestType,
+        #[serde(default)]
+        target: SpeedTestTarget,
     },
     Deregistered {
         reason: String,
@@ -126,8 +143,22 @@ mod tests {
         let json = r#"{"type":"start_speed_test","test_type":"full"}"#;
         let msg: IncomingMessage = serde_json::from_str(json).unwrap();
         match msg {
-            IncomingMessage::StartSpeedTest { test_type } => {
+            IncomingMessage::StartSpeedTest { test_type, target } => {
                 assert_eq!(test_type, SpeedTestType::Full);
+                assert_eq!(target, SpeedTestTarget::Worker); // default
+            }
+            _ => panic!("Expected StartSpeedTest"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_start_speed_test_edge() {
+        let json = r#"{"type":"start_speed_test","test_type":"probe","target":"edge"}"#;
+        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            IncomingMessage::StartSpeedTest { test_type, target } => {
+                assert_eq!(test_type, SpeedTestType::Probe);
+                assert_eq!(target, SpeedTestTarget::Edge);
             }
             _ => panic!("Expected StartSpeedTest"),
         }
@@ -209,6 +240,7 @@ mod tests {
                 client_id: "abc123".into(),
                 timestamp: "2026-03-17T12:00:00Z".into(),
                 test_type: SpeedTestType::Probe,
+                target: SpeedTestTarget::Worker,
                 download_mbps: 95.2,
                 upload_mbps: 42.1,
                 payload_bytes: 262_144,
@@ -219,5 +251,25 @@ mod tests {
         assert!(json.contains(r#""type":"speed_test_result""#));
         assert!(json.contains(r#""download_mbps":95.2"#));
         assert!(json.contains(r#""type":"probe""#));
+        assert!(json.contains(r#""target":"worker""#));
+    }
+
+    #[test]
+    fn test_serialize_speed_test_result_edge() {
+        let msg = OutgoingMessage::SpeedTestResult {
+            result: SpeedTestResult {
+                client_id: "abc123".into(),
+                timestamp: "2026-03-17T12:00:00Z".into(),
+                test_type: SpeedTestType::Full,
+                target: SpeedTestTarget::Edge,
+                download_mbps: 200.5,
+                upload_mbps: 85.3,
+                payload_bytes: 10_485_760,
+                duration_ms: 1200,
+            },
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""target":"edge""#));
+        assert!(json.contains(r#""type":"full""#));
     }
 }

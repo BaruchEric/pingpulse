@@ -4,6 +4,7 @@ import type {
   PingResult,
   ProbeRecord,
   SpeedTestResult,
+  SpeedTestTarget,
   AlertRecord,
   WSMessage,
   ServerLogEntry,
@@ -676,14 +677,16 @@ export class ClientMonitor implements DurableObject {
   ): Promise<void> {
     // Always use server UTC timestamp for consistent time-range queries
     const timestamp = new Date().toISOString();
+    const { target } = result;
     await this.env.DB.prepare(
-      "INSERT INTO speed_tests (id, client_id, timestamp, type, download_mbps, upload_mbps, payload_bytes, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO speed_tests (id, client_id, timestamp, type, target, download_mbps, upload_mbps, payload_bytes, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
       .bind(
         crypto.randomUUID(),
         result.client_id,
         timestamp,
         result.type,
+        target,
         result.download_mbps,
         result.upload_mbps,
         result.payload_bytes,
@@ -692,11 +695,11 @@ export class ClientMonitor implements DurableObject {
       .run();
 
     this.env.METRICS.writeDataPoint({
-      blobs: [result.client_id, "download_mbps"],
+      blobs: [result.client_id, `download_mbps_${target}`],
       doubles: [result.download_mbps],
     });
     this.env.METRICS.writeDataPoint({
-      blobs: [result.client_id, "upload_mbps"],
+      blobs: [result.client_id, `upload_mbps_${target}`],
       doubles: [result.upload_mbps],
     });
   }
@@ -721,9 +724,10 @@ export class ClientMonitor implements DurableObject {
         return Response.json({ ok: true, state: "running" });
 
       case "speed_test": {
-        const testType = params?.test_type === "probe" ? "probe" as const : "full" as const;
-        this.broadcast({ type: "start_speed_test", test_type: testType });
-        return Response.json({ ok: true, test_type: testType });
+        const testType: "probe" | "full" = params?.test_type === "probe" ? "probe" : "full";
+        const target: SpeedTestTarget = params?.target === "edge" ? "edge" : "worker";
+        this.broadcast({ type: "start_speed_test", test_type: testType, target });
+        return Response.json({ ok: true, test_type: testType, target });
       }
 
       case "simulate": {
@@ -809,7 +813,7 @@ export class ClientMonitor implements DurableObject {
   }
 
   private handleSpeedTestTrigger(): Response {
-    this.broadcast({ type: "start_speed_test", test_type: "full" });
+    this.broadcast({ type: "start_speed_test", test_type: "full", target: "worker" });
     return new Response("OK");
   }
 

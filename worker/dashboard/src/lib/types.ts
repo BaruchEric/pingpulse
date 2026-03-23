@@ -68,9 +68,13 @@ export interface PingResult {
   status: "ok" | "timeout" | "error";
 }
 
+// Keep in sync with worker/src/types.ts
+export type SpeedTestTarget = "worker" | "edge";
+
 export interface SpeedTest {
   timestamp: string;
   type: "probe" | "full";
+  target: SpeedTestTarget;
   download_mbps: number;
   upload_mbps: number;
   payload_bytes: number;
@@ -168,6 +172,7 @@ export interface AnalysisResponse {
   }[];
   speed_test_stats: {
     type: string;
+    target: string;
     count: number;
     avg_dl: number;
     min_dl: number;
@@ -203,6 +208,7 @@ export interface AnalysisResponse {
   }[];
   full_speed_tests: {
     timestamp: string;
+    target: string;
     download_mbps: number;
     upload_mbps: number;
     duration_ms: number;

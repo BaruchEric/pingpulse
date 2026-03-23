@@ -132,24 +132,31 @@ export function ControlPanel() {
         {/* Speed Tests */}
         <div className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/50 p-5">
           <h2 className="text-sm font-medium text-zinc-400">Speed Tests</h2>
-          <div className="flex gap-2">
-            <button
-              onClick={() => runCommand("speed_test", { test_type: "probe" }, "Probe test")}
-              disabled={busy !== null || !status?.connected}
-              className={btnSecondary}
-            >
-              {busy === "speed_test" ? "Running..." : "Probe (256KB)"}
-            </button>
-            <button
-              onClick={() => runCommand("speed_test", { test_type: "full" }, "Full test")}
-              disabled={busy !== null || !status?.connected}
-              className={btnPrimary}
-            >
-              Full Test (10MB)
-            </button>
+          <div className="space-y-3">
+            {([["worker", "vs Worker"], ["edge", "vs Nearest Edge"]] as const).map(([target, label]) => (
+              <div key={target}>
+                <div className="mb-1.5 text-xs text-zinc-500">{label}</div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => runCommand("speed_test", { test_type: "probe", target }, `Probe (${target})`)}
+                    disabled={busy !== null || !status?.connected}
+                    className={btnSecondary}
+                  >
+                    {busy === "speed_test" ? "Running..." : "Probe (256KB)"}
+                  </button>
+                  <button
+                    onClick={() => runCommand("speed_test", { test_type: "full", target }, `Full (${target})`)}
+                    disabled={busy !== null || !status?.connected}
+                    className={btnPrimary}
+                  >
+                    Full Test (10MB)
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
           <p className="text-xs text-zinc-400">
-            Probe is a quick bandwidth check. Full test provides accurate throughput measurement.
+            Worker tests measure throughput to PingPulse. Edge tests measure throughput to the nearest Cloudflare PoP (speed.cloudflare.com).
           </p>
         </div>
 

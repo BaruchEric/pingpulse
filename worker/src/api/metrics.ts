@@ -23,7 +23,7 @@ metricsRoutes.get("/:id", async (c) => {
         .bind(id, from, to)
         .all(),
       c.env.DB.prepare(
-        "SELECT timestamp, type, download_mbps, upload_mbps, payload_bytes, duration_ms FROM speed_tests WHERE client_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC"
+        "SELECT timestamp, type, target, download_mbps, upload_mbps, payload_bytes, duration_ms FROM speed_tests WHERE client_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC"
       )
         .bind(id, from, to)
         .all(),

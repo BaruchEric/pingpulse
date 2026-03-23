@@ -8,7 +8,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
 
 use crate::config::Config;
-use crate::messages::{IncomingMessage, LogLevel, OutgoingMessage, SpeedTestType};
+use crate::messages::{IncomingMessage, LogLevel, OutgoingMessage, SpeedTestTarget, SpeedTestType};
 use crate::probe::{HttpTarget, IcmpTarget, ProbeEngine};
 use crate::speed_test;
 use crate::store::ProbeStore;
@@ -351,7 +351,7 @@ async fn connect_and_run(
                 let tx = speed_tx.clone();
 
                 tokio::spawn(async move {
-                    let result = speed_test::run_probe(&http, &base_url, &client_id, probe_size).await;
+                    let result = speed_test::run_probe(&http, &base_url, &client_id, probe_size, SpeedTestTarget::Worker).await;
                     let msg = match result {
                         Ok(result) => OutgoingMessage::SpeedTestResult { result },
                         Err(e) => {
@@ -514,7 +514,7 @@ async fn handle_message(
             });
         }
 
-        IncomingMessage::StartSpeedTest { test_type } => {
+        IncomingMessage::StartSpeedTest { test_type, target } => {
             let http = http.clone();
             let base_url = config.server.base_url.clone();
             let client_id = config.server.client_id.clone();
@@ -525,10 +525,10 @@ async fn handle_message(
             tokio::spawn(async move {
                 let result = match test_type {
                     SpeedTestType::Probe => {
-                        speed_test::run_probe(&http, &base_url, &client_id, probe_size).await
+                        speed_test::run_probe(&http, &base_url, &client_id, probe_size, target).await
                     }
                     SpeedTestType::Full => {
-                        speed_test::run_full(&http, &base_url, &client_id, full_size).await
+                        speed_test::run_full(&http, &base_url, &client_id, full_size, target).await
                     }
                 };
 
