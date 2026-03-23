@@ -122,7 +122,7 @@ jobs:
           Compress-Archive -Path "pingpulse.exe" -DestinationPath "${{ matrix.name }}.zip"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.name }}
           path: ${{ runner.os == 'Windows' && format('{0}.zip', matrix.name) || format('{0}.tar.gz', matrix.name) }}
@@ -144,7 +144,7 @@ jobs:
           fi
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -167,4 +167,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add worker/wrangler.toml
-          git diff --cached --quiet || git commit -m "chore: bump LATEST_CLIENT_VERSION to ${version}" && git push origin HEAD:master
+          git diff --cached --quiet || { git commit -m "chore: bump LATEST_CLIENT_VERSION to ${version}" && git push origin HEAD:master; }

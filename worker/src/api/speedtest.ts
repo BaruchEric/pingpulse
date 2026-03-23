@@ -21,7 +21,6 @@ speedtestRoutes.get("/download", (c) => {
   const stream = new ReadableStream({
     pull(controller) {
       const chunkSize = Math.min(CHUNK_SIZE, remaining);
-      // Re-use the pre-allocated zero chunk (or a slice for the last chunk)
       controller.enqueue(
         chunkSize === CHUNK_SIZE ? ZERO_CHUNK : ZERO_CHUNK.slice(0, chunkSize)
       );

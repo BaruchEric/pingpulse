@@ -149,7 +149,7 @@ export function ControlPanel() {
                     disabled={busy !== null || !status?.connected}
                     className={btnPrimary}
                   >
-                    Full Test (10MB)
+                    Full Test (50MB)
                   </button>
                 </div>
               </div>
