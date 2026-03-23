@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import type uPlot from "uplot";
 import { useUPlotChart } from "@/components/useUPlotChart";
+import { api } from "@/lib/api";
+import { DARK_AXIS } from "@/lib/chart-defaults";
 
 interface ProbeResult {
   timestamp: number;
@@ -42,14 +44,9 @@ export function WanQualityChart({
   const fetchProbes = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        from: String(new Date(from).getTime()),
-        to: String(new Date(to).getTime()),
-      });
-      if (filter !== "all") params.set("type", filter);
-      const res = await fetch(`/api/metrics/${clientId}/probes?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch probes");
-      const json = await res.json() as { data: ProbeResult[] };
+      const fromMs = String(new Date(from).getTime());
+      const toMs = String(new Date(to).getTime());
+      const json = await api.getProbes(clientId, fromMs, toMs, filter !== "all" ? filter : undefined) as { data: ProbeResult[] };
       setProbes(json.data);
     } catch {
       setProbes([]);
@@ -110,8 +107,8 @@ export function WanQualityChart({
       cursor: { show: true },
       scales: { x: { time: true }, y: { auto: true } },
       axes: [
-        { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" } },
-        { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" }, label: "RTT (ms)" },
+        { ...DARK_AXIS },
+        { ...DARK_AXIS, label: "RTT (ms)" },
       ],
       series,
     };
@@ -124,11 +121,11 @@ export function WanQualityChart({
     class: "uplot-dark",
     scales: { x: { time: true }, y: { auto: true } },
     axes: [
-      { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" } },
-      { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" }, label: "RTT (ms)" },
+      { ...DARK_AXIS },
+      { ...DARK_AXIS, label: "RTT (ms)" },
     ],
     series: [{}],
-  }, data);
+  }, data, filter);
 
   const filters: { label: string; value: ProbeFilter }[] = [
     { label: "ALL", value: "all" },

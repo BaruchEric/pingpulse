@@ -97,9 +97,12 @@ export function EditClientDialog({
 
   const [saving, setSaving] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setError(null);
     try {
       const parseTargets = (s: string) =>
         s.split(",").map((t) => t.trim()).filter(Boolean);
@@ -134,6 +137,8 @@ export function EditClientDialog({
         } as Partial<Client["config"]>,
       });
       onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -309,6 +314,9 @@ export function EditClientDialog({
           </fieldset>
         </div>
 
+        {error && (
+          <div className="rounded-md border border-red-800 bg-red-950/30 px-3 py-2 text-sm text-red-400">{error}</div>
+        )}
         <div className="flex gap-2 pt-2">
           <button type="submit" disabled={saving}
             className="flex-1 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50">

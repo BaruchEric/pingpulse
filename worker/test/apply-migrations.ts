@@ -13,6 +13,9 @@ const statements = [
   `CREATE TABLE IF NOT EXISTS alerts (id TEXT PRIMARY KEY, client_id TEXT NOT NULL, type TEXT NOT NULL, severity TEXT NOT NULL CHECK (severity IN ('critical', 'warning', 'info')), value REAL NOT NULL, threshold REAL NOT NULL, delivered_email INTEGER NOT NULL DEFAULT 0, delivered_telegram INTEGER NOT NULL DEFAULT 0, timestamp TEXT NOT NULL, FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE)`,
   `CREATE INDEX IF NOT EXISTS idx_alerts_client_ts ON alerts(client_id, timestamp)`,
   `CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0, window_start TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS bot_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS client_probe_results (id TEXT PRIMARY KEY, client_id TEXT NOT NULL, session_id TEXT, probe_type TEXT NOT NULL, target TEXT NOT NULL, timestamp TEXT NOT NULL, rtt_ms REAL, status TEXT NOT NULL, http_status INTEGER, error TEXT, FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE)`,
+  `CREATE INDEX IF NOT EXISTS idx_client_probe_results_client_ts ON client_probe_results(client_id, timestamp)`,
 ];
 
 for (const sql of statements) {

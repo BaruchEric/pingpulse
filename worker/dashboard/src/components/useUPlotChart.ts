@@ -6,9 +6,11 @@ export function useUPlotChart(
   containerRef: React.RefObject<HTMLDivElement | null>,
   getOpts: () => Omit<uPlot.Options, "width">,
   data: uPlot.AlignedData | null,
+  seriesKey?: string,
 ) {
   const chartRef = useRef<uPlot | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
+  const seriesKeyRef = useRef(seriesKey);
   const getOptsRef = useRef(getOpts);
   // eslint-disable-next-line react-hooks/refs -- intentional ref sync pattern for stable callback
   getOptsRef.current = getOpts;
@@ -25,6 +27,15 @@ export function useUPlotChart(
     const el = containerRef.current;
     if (!el || !data || data[0].length === 0) return;
 
+    // Recreate chart if series config changed
+    if (chartRef.current && seriesKey !== seriesKeyRef.current) {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      chartRef.current.destroy();
+      chartRef.current = null;
+    }
+    seriesKeyRef.current = seriesKey;
+
     if (chartRef.current) {
       chartRef.current.setData(data);
       return;
@@ -40,5 +51,5 @@ export function useUPlotChart(
     });
     observer.observe(el);
     observerRef.current = observer;
-  }, [data, containerRef]);
+  }, [data, containerRef, seriesKey]);
 }

@@ -4,6 +4,10 @@ import type { Env } from "@/index";
 
 const mockDB = {
   prepare: () => ({
+    bind: () => ({
+      first: () => Promise.resolve(null),
+      run: () => Promise.resolve(),
+    }),
     first: () => Promise.resolve(null),
   }),
 } as unknown as D1Database;

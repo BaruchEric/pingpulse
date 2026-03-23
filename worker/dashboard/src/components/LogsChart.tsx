@@ -1,6 +1,7 @@
 import { useRef, useMemo } from "react";
 import type uPlot from "uplot";
 import { useUPlotChart } from "@/components/useUPlotChart";
+import { DARK_AXIS } from "@/lib/chart-defaults";
 import type { PingResult } from "@/lib/types";
 
 export function LogsChart({ logs }: { logs: PingResult[] }) {
@@ -35,8 +36,8 @@ export function LogsChart({ logs }: { logs: PingResult[] }) {
       cursor: { show: true },
       scales: { x: { time: true }, y: { auto: true } },
       axes: [
-        { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" } },
-        { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" }, label: "RTT (ms)", size: 50 },
+        { ...DARK_AXIS },
+        { ...DARK_AXIS, label: "RTT (ms)", size: 50 },
       ],
       series: [
         {},

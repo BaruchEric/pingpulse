@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { Client } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Sparkline } from "@/components/Sparkline";
+import { formatTimeSince } from "@/lib/format";
 
 export function ClientCard({
   client,
@@ -65,12 +66,4 @@ export function ClientCard({
       </div>
     </Link>
   );
-}
-
-function formatTimeSince(iso: string): string {
-  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
 }

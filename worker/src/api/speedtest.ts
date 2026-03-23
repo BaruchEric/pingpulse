@@ -9,15 +9,25 @@ export const speedtestRoutes = new Hono<AppEnv>();
 speedtestRoutes.get("/download", (c) => {
   const size = parseInt(c.req.query("size") || "262144");
   const totalSize = Math.min(size, 25 * 1024 * 1024);
-  const payload = new Uint8Array(totalSize);
-  // getRandomValues() has a 64KB limit per call
   const CHUNK = 65536;
-  for (let i = 0; i < totalSize; i += CHUNK) {
-    const end = Math.min(i + CHUNK, totalSize);
-    crypto.getRandomValues(payload.subarray(i, end));
-  }
-  return new Response(payload, {
-    headers: { "Content-Type": "application/octet-stream" },
+  let remaining = totalSize;
+
+  const stream = new ReadableStream({
+    pull(controller) {
+      const chunkSize = Math.min(CHUNK, remaining);
+      const chunk = new Uint8Array(chunkSize);
+      crypto.getRandomValues(chunk);
+      controller.enqueue(chunk);
+      remaining -= chunkSize;
+      if (remaining <= 0) controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "Content-Length": String(totalSize),
+    },
   });
 });
 

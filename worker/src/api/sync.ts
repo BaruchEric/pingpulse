@@ -1,35 +1,12 @@
 import { Hono } from "hono";
 import type { AppEnv } from "@/middleware/auth-guard";
 import type { SyncBatch, SyncResponse } from "@/types";
-import { hashString } from "@/utils/hash";
+import { clientSecretAuth } from "@/middleware/client-auth";
 
 export const syncRoutes = new Hono<AppEnv>();
 
-syncRoutes.post("/:clientId/sync", async (c) => {
+syncRoutes.post("/:clientId/sync", clientSecretAuth, async (c) => {
   const clientId = c.req.param("clientId");
-  const authHeader = c.req.header("Authorization");
-
-  if (!authHeader?.startsWith("Bearer ")) {
-    return c.json({ error: "Missing authorization" }, 401);
-  }
-  const clientSecret = authHeader.slice(7);
-
-  // Verify client exists and secret matches
-  const client = await c.env.DB.prepare(
-    "SELECT id, secret_hash FROM clients WHERE id = ?"
-  )
-    .bind(clientId)
-    .first<{ id: string; secret_hash: string }>();
-
-  if (!client) {
-    return c.json({ error: "Client not found" }, 404);
-  }
-
-  const secretHash = await hashString(clientSecret);
-  if (secretHash !== client.secret_hash) {
-    return c.json({ error: "Invalid credentials" }, 401);
-  }
-
   const batch: SyncBatch = await c.req.json();
 
   if (!batch.session_id || !Array.isArray(batch.records) || batch.records.length === 0) {

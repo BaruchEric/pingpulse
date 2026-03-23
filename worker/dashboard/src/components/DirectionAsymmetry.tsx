@@ -2,6 +2,7 @@ import { useRef, useMemo } from "react";
 import type uPlot from "uplot";
 import type { AnalysisResponse } from "@/lib/types";
 import { useUPlotChart } from "@/components/useUPlotChart";
+import { DARK_AXIS } from "@/lib/chart-defaults";
 
 const OPTS: Omit<uPlot.Options, "width"> = {
   height: 280,
@@ -9,8 +10,8 @@ const OPTS: Omit<uPlot.Options, "width"> = {
   cursor: { show: true },
   scales: { x: { time: false }, y: { auto: true } },
   axes: [
-    { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" }, label: "Hour" },
-    { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" }, label: "ms" },
+    { ...DARK_AXIS, label: "Hour" },
+    { ...DARK_AXIS, label: "ms" },
   ],
   series: [
     {},

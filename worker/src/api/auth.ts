@@ -7,11 +7,15 @@ import { DEFAULT_CLIENT_CONFIG } from "@/types";
 
 export const authRoutes = new Hono<AppEnv>();
 
+function toBase64Url(str: string): string {
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 async function createJWT(secret: string): Promise<string> {
   const encoder = new TextEncoder();
-  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const header = toBase64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const now = Math.floor(Date.now() / 1000);
-  const payload = btoa(
+  const payload = toBase64Url(
     JSON.stringify({
       sub: "admin",
       iat: now,
@@ -33,10 +37,7 @@ async function createJWT(secret: string): Promise<string> {
     encoder.encode(`${header}.${payload}`)
   );
 
-  const sig = btoa(String.fromCharCode(...new Uint8Array(signature)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  const sig = toBase64Url(String.fromCharCode(...new Uint8Array(signature)));
 
   return `${header}.${payload}.${sig}`;
 }

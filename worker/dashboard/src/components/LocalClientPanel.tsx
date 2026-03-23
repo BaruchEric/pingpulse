@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { localAgent, type AgentStatus, type AgentLogs } from "@/lib/local-agent";
+import { formatDuration } from "@/lib/format";
 
 interface Props {
   onUninstalled: () => void;
@@ -51,6 +52,7 @@ export function LocalClientPanel({ onUninstalled }: Props) {
       if (document.hidden) {
         clearInterval(pollRef.current);
       } else {
+        clearInterval(pollRef.current);
         fetchStatus();
         pollRef.current = setInterval(fetchStatus, 5000);
       }
@@ -173,7 +175,7 @@ export function LocalClientPanel({ onUninstalled }: Props) {
             </div>
             {status && (
               <p className="mt-0.5 font-mono text-xs text-zinc-500">
-                v{status.agent_version} · uptime {formatUptime(status.uptime_s)}
+                v{status.agent_version} · uptime {formatDuration(status.uptime_s)}
               </p>
             )}
           </div>
@@ -248,10 +250,3 @@ export function LocalClientPanel({ onUninstalled }: Props) {
   );
 }
 
-function formatUptime(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}

@@ -18,15 +18,11 @@ clientRoutes.get("/", async (c) => {
         AVG(rtt_ms) as avg_rtt_ms,
         CAST(SUM(CASE WHEN status != 'ok' THEN 1 ELSE 0 END) AS REAL) * 100.0 / COUNT(*) as loss_pct
       FROM (
-        SELECT client_id, rtt_ms, status
-        FROM ping_results p1
-        WHERE rowid IN (
-          SELECT rowid FROM ping_results p2
-          WHERE p2.client_id = p1.client_id
-          ORDER BY timestamp DESC
-          LIMIT 10
-        )
+        SELECT client_id, rtt_ms, status,
+          ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY timestamp DESC) as rn
+        FROM ping_results
       )
+      WHERE rn <= 10
       GROUP BY client_id
     `),
     c.env.DB.prepare(`

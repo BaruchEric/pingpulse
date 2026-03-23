@@ -71,13 +71,10 @@ export async function dispatchAlert(
         ?? DEFAULT_CLIENT_CONFIG.telegram_notification_sound;
       const isSilent = soundConfig[alert.type] === "silent";
 
-      // "silent" means don't send this alert type at all (not just mute sound)
-      if (!isSilent) {
-        promises.push(
-          sendTelegramMessage(env, message)
-            .then((ok) => { result.telegram = ok; })
-        );
-      }
+      promises.push(
+        sendTelegramMessage(env, message, { silent: isSilent })
+          .then((ok) => { result.telegram = ok; })
+      );
     }
   }
 

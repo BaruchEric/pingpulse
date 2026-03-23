@@ -40,7 +40,7 @@ export async function authGuard(c: Context<AppEnv>, next: Next) {
       return c.json({ error: "Invalid token" }, 401);
     }
 
-    const payload: JwtPayload = JSON.parse(atob(payloadB64));
+    const payload: JwtPayload = JSON.parse(atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/")));
     if (payload.exp && payload.exp < Date.now() / 1000) {
       return c.json({ error: "Token expired" }, 401);
     }

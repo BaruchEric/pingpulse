@@ -38,23 +38,38 @@ function fmtDate(iso: string): string {
   return iso.replace("T", " ").replace(/\.\d+Z$/, " UTC").replace("Z", " UTC");
 }
 
+interface ParsedReportData {
+  pings: PingStat[];
+  alerts: AlertSummary[];
+  speeds: SpeedStat[];
+  counts: RecordCount[];
+  probeStats: { probe_type: string; target: string; status: string; count: number; avg_rtt: number | null }[];
+}
+
+function parseReportData(data: Record<string, unknown[]>): ParsedReportData {
+  return {
+    pings: (data.ping_stats || []) as PingStat[],
+    alerts: (data.alert_summary || []) as AlertSummary[],
+    speeds: (data.speed_test_stats || []) as SpeedStat[],
+    counts: (data.record_counts || []) as RecordCount[],
+    probeStats: (data.probe_stats || []) as ParsedReportData["probeStats"],
+  };
+}
+
 export function formatTelegramReport(
   clientName: string,
   from: string,
   to: string,
   data: Record<string, unknown[]>
 ): string {
-  const pings = (data.ping_stats || []) as PingStat[];
+  const { pings, alerts, speeds, counts } = parseReportData(data);
   const cfTo = pings.find((p) => p.direction === "cf_to_client" && p.status === "ok");
   const toCf = pings.find((p) => p.direction === "client_to_cf" && p.status === "ok");
-  const alerts = (data.alert_summary || []) as AlertSummary[];
   const totalAlerts = alerts.reduce((sum, a) => sum + a.count, 0);
   const alertBreakdown = alerts.map((a) => `${a.type}: ${a.count}`).join(", ");
-  const speeds = (data.speed_test_stats || []) as SpeedStat[];
   const fullSpeed = speeds.find((s) => s.type === "full");
   const probeSpeed = speeds.find((s) => s.type === "probe");
   const speed = fullSpeed || probeSpeed;
-  const counts = (data.record_counts || []) as RecordCount[];
   const outageCount = counts.find((c) => c.tbl === "outages")?.cnt || 0;
   const totalProbes = counts.find((c) => c.tbl === "client_probe_results")?.cnt || 0;
   const totalErrors = (data.recent_errors as unknown[])?.length || 0;
@@ -80,10 +95,7 @@ export function formatEmailReport(
   to: string,
   data: Record<string, unknown[]>
 ): string {
-  const pings = (data.ping_stats || []) as PingStat[];
-  const alerts = (data.alert_summary || []) as AlertSummary[];
-  const speeds = (data.speed_test_stats || []) as SpeedStat[];
-  const probeStats = data.probe_stats as { probe_type: string; target: string; status: string; count: number; avg_rtt: number | null }[];
+  const { pings, alerts, speeds, probeStats } = parseReportData(data);
 
   const tableStyle = `style="border-collapse:collapse;width:100%;font-family:monospace;font-size:13px;"`;
   const thStyle = `style="text-align:left;padding:6px 10px;border-bottom:2px solid #333;color:#999;"`;

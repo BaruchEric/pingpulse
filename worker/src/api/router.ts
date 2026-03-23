@@ -11,8 +11,8 @@ import { commandRoutes } from "@/api/command";
 import { syncRoutes } from "@/api/sync";
 import { analysisRoutes } from "@/api/analysis";
 import { telegramRoutes } from "@/api/telegram";
-import { hashString } from "@/utils/hash";
 import { deleteClientCascade } from "@/utils/client-db";
+import { clientSecretAuth } from "@/middleware/client-auth";
 
 export function createRouter() {
   const app = new Hono<AppEnv>();
@@ -29,34 +29,12 @@ export function createRouter() {
   app.route("/api/auth", authRoutes);
 
   // Client self-delete (authenticated with client secret, not admin JWT)
-  app.delete("/api/clients/:id/self", async (c) => {
+  app.delete("/api/clients/:id/self", clientSecretAuth, async (c) => {
     const id = c.req.param("id");
-    const authHeader = c.req.header("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return c.json({ error: "Missing or invalid Authorization header" }, 401);
-    }
-    const secret = authHeader.slice(7);
-
-    const client = await c.env.DB.prepare(
-      "SELECT id, secret_hash FROM clients WHERE id = ?"
-    )
-      .bind(id)
-      .first<{ id: string; secret_hash: string }>();
-
-    if (!client) {
-      return c.json({ error: "Client not found" }, 404);
-    }
-
-    const secretHash = await hashString(secret);
-    if (secretHash !== client.secret_hash) {
-      return c.json({ error: "Invalid client secret" }, 403);
-    }
-
     const { deleted } = await deleteClientCascade(c.env.DB, id);
     if (!deleted) {
       return c.json({ error: "Client not found" }, 404);
     }
-
     return c.json({ ok: true });
   });
 

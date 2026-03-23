@@ -101,6 +101,13 @@ export const api = {
       disconnected_at: string | null;
     }>(`/api/command/${id}/status`),
 
+  // Probes
+  getProbes: (id: string, from: string, to: string, type?: string) => {
+    const params = new URLSearchParams({ from, to });
+    if (type) params.set("type", type);
+    return request<{ data: unknown[] }>(`/api/metrics/${id}/probes?${params}`);
+  },
+
   // Analysis
   getAnalysis: (id: string, from: string, to: string) =>
     request<AnalysisResponse>(`/api/metrics/${id}/analysis?from=${from}&to=${to}`),

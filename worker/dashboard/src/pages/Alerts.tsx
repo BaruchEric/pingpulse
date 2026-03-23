@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAlerts, useClients } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { AlertRow } from "@/components/AlertRow";
@@ -34,8 +34,16 @@ export function Alerts() {
   const [reportEmail, setReportEmail] = useState(true);
   const [sounds, setSounds] = useState<Record<AlertType, "default" | "silent">>({ ...DEFAULT_SOUNDS });
   const [savingSounds, setSavingSounds] = useState(false);
+  const notifTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Load sound config from first client
+  // Auto-clear notification messages
+  useEffect(() => {
+    if (!notifMsg) return;
+    notifTimerRef.current = setTimeout(() => setNotifMsg(""), 2000);
+    return () => clearTimeout(notifTimerRef.current);
+  }, [notifMsg]);
+
+  // Load sound + report config from first client
   useEffect(() => {
     const clients = clientsData?.clients;
     if (!clients?.length) return;
@@ -43,6 +51,12 @@ export function Alerts() {
     if (!first) return;
     const cfg = first.config.telegram_notification_sound;
     if (cfg) setSounds({ ...DEFAULT_SOUNDS, ...cfg });
+    if (first.config.report_schedule) setReportSchedule(first.config.report_schedule);
+    const channels = first.config.report_channels;
+    if (channels) {
+      setReportTelegram(channels.includes("telegram"));
+      setReportEmail(channels.includes("email"));
+    }
   }, [clientsData]);
 
   const handleSaveThresholds = async () => {
@@ -70,7 +84,6 @@ export function Alerts() {
         )
       );
       setNotifMsg("Notification sounds saved");
-      setTimeout(() => setNotifMsg(""), 2000);
     } finally {
       setSavingSounds(false);
     }
@@ -83,8 +96,17 @@ export function Alerts() {
     }));
   };
 
+  const [testingAlert, setTestingAlert] = useState(false);
   const handleTestAlert = async () => {
-    await api.testAlert();
+    setTestingAlert(true);
+    try {
+      await api.testAlert();
+      setNotifMsg("Test alert sent");
+    } catch {
+      setNotifMsg("Failed to send test alert");
+    } finally {
+      setTestingAlert(false);
+    }
   };
 
   return (
@@ -124,9 +146,10 @@ export function Alerts() {
           </button>
           <button
             onClick={handleTestAlert}
-            className="rounded-md border border-zinc-700 px-4 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+            disabled={testingAlert}
+            className="rounded-md border border-zinc-700 px-4 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
           >
-            Send Test Alert
+            {testingAlert ? "Sending..." : "Send Test Alert"}
           </button>
         </div>
       </div>
@@ -200,12 +223,33 @@ export function Alerts() {
             </label>
           </div>
           <button
-            onClick={() => {
-              setNotifMsg("Report settings saved");
+            onClick={async () => {
+              const clients = clientsData?.clients;
+              if (!clients?.length) return;
+              setSaving(true);
+              try {
+                await Promise.all(
+                  clients.map((c) =>
+                    api.updateClient(c.id, {
+                      config: {
+                        report_schedule: reportSchedule as "daily" | "6h" | "weekly" | "off",
+                        report_channels: [
+                          ...(reportTelegram ? ["telegram" as const] : []),
+                          ...(reportEmail ? ["email" as const] : []),
+                        ],
+                      },
+                    })
+                  )
+                );
+                setNotifMsg("Report settings saved");
+              } finally {
+                setSaving(false);
+              }
             }}
-            className="rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)]"
+            disabled={saving}
+            className="rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
-            Save Report Settings
+            {saving ? "Saving..." : "Save Report Settings"}
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { RegisterDialog } from "@/components/RegisterDialog";
 import { useParams, Link } from "react-router";
 import { api } from "@/lib/api";
 import { useClient, useClientStatus } from "@/lib/hooks";
@@ -210,6 +211,7 @@ export function ControlPanel() {
         <div className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/50 p-5">
           <SectionHeader color="green" label="Client Config" description="pushed to agent" />
           <ConfigEditor
+            key={`${client.config.ping_interval_s}-${client.config.speed_test_interval_s}-${client.config.alert_latency_threshold_ms}-${client.config.alert_loss_threshold_pct}-${client.config.grace_period_s}`}
             config={client.config}
             onSave={async (config) => {
               setBusy("update_config");
@@ -235,7 +237,7 @@ export function ControlPanel() {
       {/* Registration */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-5">
         <h2 className="mb-3 text-sm font-medium text-zinc-400">Client Registration</h2>
-        <RegistrationPanel />
+        <RegisterInline />
       </div>
     </div>
   );
@@ -297,69 +299,18 @@ function ConfigEditor({
   );
 }
 
-function RegistrationPanel() {
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const handleGenerate = async () => {
-    setLoading(true);
-    try {
-      const { token } = await api.generateToken();
-      setToken(token);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  if (!token) {
-    return (
-      <div className="flex items-center gap-4">
-        <button
-          onClick={handleGenerate}
-          disabled={loading}
-          className="rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
-        >
-          {loading ? "Generating..." : "Generate Registration Token"}
-        </button>
-        <span className="text-xs text-zinc-500">Creates a one-time token for a new client (expires in 15 min)</span>
-      </div>
-    );
-  }
-
-  const cmd = `pingpulse register --server <SERVER_URL> --token ${token} --name "My Client" --location "Office"`;
-
+function RegisterInline() {
+  const [show, setShow] = useState(false);
+  if (show) return <RegisterDialog onClose={() => setShow(false)} />;
   return (
-    <div className="space-y-3">
-      <div className="rounded-md bg-zinc-950 p-3 font-mono text-xs text-zinc-300 break-all select-all">
-        {cmd}
-      </div>
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => handleCopy(cmd)}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
-        >
-          {copied ? "Copied!" : "Copy Command"}
-        </button>
-        <button
-          onClick={() => handleCopy(token)}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
-        >
-          Copy Token Only
-        </button>
-        <button
-          onClick={() => setToken(null)}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800"
-        >
-          New Token
-        </button>
-      </div>
+    <div className="flex items-center gap-4">
+      <button
+        onClick={() => setShow(true)}
+        className="rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)]"
+      >
+        Generate Registration Token
+      </button>
+      <span className="text-xs text-zinc-500">Creates a one-time token for a new client (expires in 15 min)</span>
     </div>
   );
 }

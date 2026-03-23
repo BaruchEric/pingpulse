@@ -789,6 +789,7 @@ export class ClientMonitor implements DurableObject {
           "down_alert_escalation_enabled", "down_alert_escalate_after_seconds",
           "down_alert_escalate_channels",
           "report_schedule", "report_channels",
+          "telegram_notification_sound",
         ];
         const configUpdates: Partial<ClientConfig> = {};
         for (const key of allowed) {

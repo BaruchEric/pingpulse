@@ -2,14 +2,15 @@ import { useRef, useMemo } from "react";
 import type uPlot from "uplot";
 import type { SpeedTest } from "@/lib/types";
 import { useUPlotChart } from "@/components/useUPlotChart";
+import { DARK_AXIS } from "@/lib/chart-defaults";
 
 const OPTS: Omit<uPlot.Options, "width"> = {
   height: 200,
   class: "uplot-dark",
   scales: { x: { time: true }, y: { auto: true } },
   axes: [
-    { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" } },
-    { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" }, label: "Mbps" },
+    { ...DARK_AXIS },
+    { ...DARK_AXIS, label: "Mbps" },
   ],
   series: [
     {},

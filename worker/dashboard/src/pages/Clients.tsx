@@ -8,6 +8,18 @@ import { RegisterDialog } from "@/components/RegisterDialog";
 import { EditClientDialog } from "@/components/EditClientDialog";
 import { LocalClientPanel } from "@/components/LocalClientPanel";
 
+function semverLt(a: string, b: string): boolean {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const va = pa[i] ?? 0;
+    const vb = pb[i] ?? 0;
+    if (va < vb) return true;
+    if (va > vb) return false;
+  }
+  return false;
+}
+
 export function Clients() {
   const { data, refresh } = useClients(3_000);
   const clients = data?.clients ?? null;
@@ -87,7 +99,7 @@ export function Clients() {
                   <td className="px-4 py-3 text-zinc-400">{client.location}</td>
                   <td className="px-4 py-3 font-mono text-zinc-400">
                     {client.client_version || "—"}
-                    {latestVersion && client.client_version && client.client_version < latestVersion && (
+                    {latestVersion && client.client_version && semverLt(client.client_version, latestVersion) && (
                       <button
                         onClick={async (e) => {
                           e.stopPropagation();

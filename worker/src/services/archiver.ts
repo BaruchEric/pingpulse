@@ -1,25 +1,36 @@
+import type { D1Database } from "@cloudflare/workers-types";
 import type { Env } from "@/index";
 
 const DELETE_BATCH_SIZE = 500;
+const SELECT_PAGE_SIZE = 5000;
+
+async function selectAllPaged(
+  db: D1Database,
+  sql: string,
+  bindings: unknown[],
+): Promise<Record<string, unknown>[]> {
+  const all: Record<string, unknown>[] = [];
+  let offset = 0;
+  while (true) {
+    const { results } = await db.prepare(`${sql} LIMIT ${SELECT_PAGE_SIZE} OFFSET ${offset}`)
+      .bind(...bindings)
+      .all();
+    all.push(...results);
+    if (results.length < SELECT_PAGE_SIZE) break;
+    offset += SELECT_PAGE_SIZE;
+  }
+  return all;
+}
 
 async function archiveClient(
   env: Env,
   clientId: string,
   cutoff: string
 ): Promise<number> {
-  const [{ results: oldPings }, { results: oldSpeedTests }] =
-    await Promise.all([
-      env.DB.prepare(
-        "SELECT * FROM ping_results WHERE client_id = ? AND timestamp < ?"
-      )
-        .bind(clientId, cutoff)
-        .all(),
-      env.DB.prepare(
-        "SELECT * FROM speed_tests WHERE client_id = ? AND timestamp < ?"
-      )
-        .bind(clientId, cutoff)
-        .all(),
-    ]);
+  const [oldPings, oldSpeedTests] = await Promise.all([
+    selectAllPaged(env.DB, "SELECT * FROM ping_results WHERE client_id = ? AND timestamp < ?", [clientId, cutoff]),
+    selectAllPaged(env.DB, "SELECT * FROM speed_tests WHERE client_id = ? AND timestamp < ?", [clientId, cutoff]),
+  ]);
 
   if (oldPings.length === 0 && oldSpeedTests.length === 0) return 0;
 
@@ -61,10 +72,8 @@ async function archiveClient(
     }
   };
 
-  await Promise.all([
-    deleteInBatches("ping_results", "id"),
-    deleteInBatches("speed_tests", "id"),
-  ]);
+  await deleteInBatches("ping_results", "id");
+  await deleteInBatches("speed_tests", "id");
 
   return oldPings.length + oldSpeedTests.length;
 }

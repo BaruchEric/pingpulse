@@ -2,6 +2,8 @@ import { useRef, useMemo } from "react";
 import type uPlot from "uplot";
 import type { PingResult, Outage } from "@/lib/types";
 import { useUPlotChart } from "@/components/useUPlotChart";
+import { DARK_AXIS } from "@/lib/chart-defaults";
+import { formatDuration } from "@/lib/format";
 
 const OPTS: Omit<uPlot.Options, "width"> = {
   height: 220,
@@ -9,8 +11,8 @@ const OPTS: Omit<uPlot.Options, "width"> = {
   cursor: { show: true },
   scales: { x: { time: true }, y: { auto: true } },
   axes: [
-    { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" } },
-    { stroke: "#71717a", grid: { stroke: "#27272a" }, ticks: { stroke: "#27272a" }, label: "RTT (ms)" },
+    { ...DARK_AXIS },
+    { ...DARK_AXIS, label: "RTT (ms)" },
   ],
   series: [
     {},
@@ -22,14 +24,6 @@ const OPTS: Omit<uPlot.Options, "width"> = {
     },
   ],
 };
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
 
 export function ConnectionStateChart({
   pings,
