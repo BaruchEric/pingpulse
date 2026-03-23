@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { dispatchAlert, type AlertPayload } from "@/services/alert-dispatch";
+import type { Env } from "@/index";
 
 const baseAlert: AlertPayload = {
   alert_id: "test-1",
@@ -32,7 +33,7 @@ describe("dispatchAlert", () => {
       ALERT_TO_EMAIL: "to@test.com",
       TELEGRAM_BOT_TOKEN: "bot123",
       TELEGRAM_CHAT_ID: "chat456",
-    } as any;
+    } as unknown as Env;
 
     const result = await dispatchAlert(env, baseAlert);
     expect(result).toEqual({ email: true, telegram: true });
@@ -50,7 +51,7 @@ describe("dispatchAlert", () => {
       RESEND_API_KEY: "re_test",
       TELEGRAM_BOT_TOKEN: "bot123",
       TELEGRAM_CHAT_ID: "chat456",
-    } as any;
+    } as unknown as Env;
 
     const result = await dispatchAlert(env, baseAlert);
     expect(result.email).toBe(false);
@@ -58,7 +59,7 @@ describe("dispatchAlert", () => {
   });
 
   it("skips channels when env vars missing", async () => {
-    const env = {} as any;
+    const env = {} as unknown as Env;
     const result = await dispatchAlert(env, baseAlert);
     expect(result).toEqual({ email: false, telegram: false });
     expect(fetchSpy).not.toHaveBeenCalled();

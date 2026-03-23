@@ -79,7 +79,7 @@ export async function runAnalysis(
 
   const output: Record<string, unknown[]> = {};
   queries.forEach((q, i) => {
-    output[q.key] = results[i]!.results ?? [];
+    output[q.key] = results[i]?.results ?? [];
   });
   return output;
 }
