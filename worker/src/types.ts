@@ -65,7 +65,7 @@ export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   speed_test_interval_s: 300,
   probe_size_bytes: 256 * 1024,
   full_test_schedule: "0 */6 * * *",
-  full_test_payload_bytes: 10 * 1024 * 1024,
+  full_test_payload_bytes: 50 * 1024 * 1024,
   alert_latency_threshold_ms: 100,
   alert_loss_threshold_pct: 5,
   grace_period_s: 60,

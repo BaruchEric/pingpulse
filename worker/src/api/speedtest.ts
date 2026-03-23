@@ -6,18 +6,25 @@ import { rateLimit } from "@/middleware/rate-limit";
 export const speedtestRoutes = new Hono<AppEnv>();
 
 // Payload endpoints — no auth (client uses these during test)
+
+// Pre-allocate a single zero-filled chunk to avoid per-request crypto overhead.
+// Random data is unnecessary for throughput measurement — zeroes saturate the
+// pipe just as well and don't burn CPU time on the worker.
+const CHUNK_SIZE = 65536;
+const ZERO_CHUNK = new Uint8Array(CHUNK_SIZE);
+
 speedtestRoutes.get("/download", (c) => {
   const size = parseInt(c.req.query("size") || "262144");
-  const totalSize = Math.min(size, 25 * 1024 * 1024);
-  const CHUNK = 65536;
+  const totalSize = Math.min(size, 100 * 1024 * 1024);
   let remaining = totalSize;
 
   const stream = new ReadableStream({
     pull(controller) {
-      const chunkSize = Math.min(CHUNK, remaining);
-      const chunk = new Uint8Array(chunkSize);
-      crypto.getRandomValues(chunk);
-      controller.enqueue(chunk);
+      const chunkSize = Math.min(CHUNK_SIZE, remaining);
+      // Re-use the pre-allocated zero chunk (or a slice for the last chunk)
+      controller.enqueue(
+        chunkSize === CHUNK_SIZE ? ZERO_CHUNK : ZERO_CHUNK.slice(0, chunkSize)
+      );
       remaining -= chunkSize;
       if (remaining <= 0) controller.close();
     },
@@ -32,8 +39,17 @@ speedtestRoutes.get("/download", (c) => {
 });
 
 speedtestRoutes.post("/upload", async (c) => {
-  const body = await c.req.arrayBuffer();
-  return c.json({ received_bytes: body.byteLength });
+  // Stream-consume the body to avoid buffering large uploads in memory
+  const reader = c.req.raw.body?.getReader();
+  let receivedBytes = 0;
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+    }
+  }
+  return c.json({ received_bytes: receivedBytes });
 });
 
 // Trigger speed test on a client — auth required

@@ -105,7 +105,7 @@ pub async fn run_full(
     total_payload: u64,
     target: SpeedTestTarget,
 ) -> anyhow::Result<SpeedTestResult> {
-    const STREAMS: u64 = 4;
+    const STREAMS: u64 = 8;
     let chunk_size = total_payload / STREAMS;
 
     info!(

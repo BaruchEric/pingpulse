@@ -283,7 +283,7 @@ impl Config {
             speed_test: SpeedTestConfig {
                 interval_s: 300,
                 probe_size_bytes: 262_144,
-                full_test_payload_bytes: 10_485_760,
+                full_test_payload_bytes: 52_428_800,
                 full_test_schedule: "0 */6 * * *".into(),
             },
             alerts: AlertConfig {
@@ -337,7 +337,7 @@ mod tests {
             speed_test: SpeedTestConfig {
                 interval_s: 300,
                 probe_size_bytes: 262_144,
-                full_test_payload_bytes: 10_485_760,
+                full_test_payload_bytes: 52_428_800,
                 full_test_schedule: "0 */6 * * *".into(),
             },
             alerts: AlertConfig {
@@ -393,7 +393,7 @@ mod tests {
             speed_test: SpeedTestConfig {
                 interval_s: 300,
                 probe_size_bytes: 262_144,
-                full_test_payload_bytes: 10_485_760,
+                full_test_payload_bytes: 52_428_800,
                 full_test_schedule: "0 */6 * * *".into(),
             },
             alerts: AlertConfig {

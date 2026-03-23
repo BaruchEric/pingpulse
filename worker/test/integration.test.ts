@@ -28,14 +28,14 @@ describe("GET /speedtest/download", () => {
     expect(body.byteLength).toBe(1024);
   });
 
-  it("caps payload at 25MB", async () => {
+  it("caps payload at 100MB", async () => {
     const req = new Request(
       "http://localhost/speedtest/download?size=999999999"
     );
     const res = await worker.fetch(req, env, ctx);
     expect(res.status).toBe(200);
     const body = await res.arrayBuffer();
-    expect(body.byteLength).toBe(25 * 1024 * 1024);
+    expect(body.byteLength).toBe(100 * 1024 * 1024);
   });
 });
 
