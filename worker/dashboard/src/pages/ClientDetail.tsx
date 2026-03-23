@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router";
-import { useClient, useMetrics, useAlerts, useLogs, getTimeRange, type TimeRange } from "@/lib/hooks";
+import { useClient, useMetrics, useAlerts, useLogs, useAnalysis, getTimeRange, type TimeRange } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SyncStatusBadge } from "@/components/SyncStatusBadge";
@@ -12,6 +12,13 @@ import { ConnectionStateChart } from "@/components/ConnectionStateChart";
 import { OutageTimeline } from "@/components/OutageTimeline";
 import { AlertRow } from "@/components/AlertRow";
 import { LogsChart } from "@/components/LogsChart";
+import { AnalysisSummaryCard } from "@/components/AnalysisSummaryCard";
+import { ProbeStatsTable } from "@/components/ProbeStatsTable";
+import { HourlyHeatmap } from "@/components/HourlyHeatmap";
+import { DirectionAsymmetry } from "@/components/DirectionAsymmetry";
+import { AlertStormSummary } from "@/components/AlertStormSummary";
+import { SpeedTestStats } from "@/components/SpeedTestStats";
+import { ReportModal } from "@/components/ReportModal";
 
 export function ClientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +31,11 @@ export function ClientDetail() {
   const { data: client, loading: clientLoading } = useClient(clientId);
   const { data: metrics, loading: metricsLoading, refresh: refreshMetrics } = useMetrics(clientId, range);
   const { data: alerts } = useAlerts(id, 10);
+  const [tab, setTab] = useState<"overview" | "analysis">(
+    window.location.hash === "#analysis" ? "analysis" : "overview"
+  );
+  const { data: analysis, loading: analysisLoading, refresh: refreshAnalysis } = useAnalysis(clientId, range);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Ping logs
   const LOGS_PER_PAGE = 50;
@@ -112,6 +124,25 @@ export function ClientDetail() {
           <TimeRangeSelector value={range} onChange={setRange} />
         </div>
       </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 rounded-lg bg-zinc-900/50 border border-zinc-800 p-1">
+        <button
+          onClick={() => { setTab("overview"); window.location.hash = ""; }}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${tab === "overview" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => { setTab("analysis"); window.location.hash = "analysis"; }}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${tab === "analysis" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+        >
+          Analysis
+        </button>
+      </div>
+
+      {tab === "overview" && (
+        <>
 
       {/* Summary stats */}
       {metrics && (
@@ -295,6 +326,80 @@ export function ClientDetail() {
           </>
         )}
       </div>
+        </>
+      )}
+
+      {tab === "analysis" && (
+        <div className="space-y-6 print:space-y-4" id="analysis-content">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium text-zinc-400">Deep Analysis</h2>
+            <div className="flex gap-2 print:hidden">
+              <button onClick={refreshAnalysis} className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700">Refresh</button>
+              <button onClick={() => setShowReportModal(true)} className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-accent-hover)]">Generate Report</button>
+              <button onClick={() => {
+                if (!analysis) return;
+                const blob = new Blob([JSON.stringify(analysis, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `analysis-${clientId}-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }} className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700">Export JSON</button>
+              <button onClick={() => window.print()} className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700">Print</button>
+            </div>
+          </div>
+
+          {analysisLoading && !analysis ? (
+            <div className="text-sm text-zinc-500">Loading analysis...</div>
+          ) : analysis ? (
+            <>
+              <AnalysisSummaryCard data={analysis} />
+
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+                <h3 className="mb-3 text-sm font-medium text-zinc-400">Direction Asymmetry</h3>
+                <DirectionAsymmetry data={analysis.direction_asymmetry} />
+              </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+                <h3 className="mb-3 text-sm font-medium text-zinc-400">Hourly Pattern</h3>
+                <HourlyHeatmap pattern={analysis.hourly_pattern} />
+              </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+                <h3 className="mb-3 text-sm font-medium text-zinc-400">Probe Statistics</h3>
+                <ProbeStatsTable stats={analysis.probe_stats} />
+              </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+                <h3 className="mb-3 text-sm font-medium text-zinc-400">Speed Test Statistics</h3>
+                <SpeedTestStats stats={analysis.speed_test_stats} />
+              </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+                <h3 className="mb-3 text-sm font-medium text-zinc-400">Alert Summary</h3>
+                <AlertStormSummary summary={analysis.alert_summary} />
+              </div>
+            </>
+          ) : (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 text-center text-sm text-zinc-500">
+              Failed to load analysis data
+              <button onClick={refreshAnalysis} className="ml-2 text-[var(--color-accent)] hover:underline">Retry</button>
+            </div>
+          )}
+
+          {showReportModal && <ReportModal clientId={clientId} onClose={() => setShowReportModal(false)} />}
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          nav, .print\\:hidden { display: none !important; }
+          body { background: white !important; color: black !important; }
+          #analysis-content { color: #111 !important; }
+          #analysis-content * { border-color: #ddd !important; }
+        }
+      `}</style>
     </div>
   );
 }
