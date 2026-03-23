@@ -28,6 +28,10 @@ export interface ClientConfig {
   down_alert_escalation_enabled: boolean;
   down_alert_escalate_after_seconds: number;
   down_alert_escalate_channels: string[];
+
+  // Health report config
+  report_schedule?: "daily" | "6h" | "weekly" | "off";
+  report_channels?: string[];
 }
 
 export interface ClientStats {
@@ -112,4 +116,74 @@ export interface Alert {
   value: number;
   threshold: number;
   timestamp: string;
+  /** 1 = delivered, 0 = not attempted, -1 = failed */
+  delivered_email: number;
+  /** 1 = delivered, 0 = not attempted, -1 = failed */
+  delivered_telegram: number;
+}
+
+// Keep in sync with worker/src/types.ts AnalysisResponse
+export interface AnalysisResponse {
+  record_counts: {
+    ping_results: number;
+    probe_results: number;
+    speed_tests: number;
+    outages: number;
+  };
+  ping_stats: {
+    direction: string;
+    status: string;
+    count: number;
+    avg_rtt: number;
+    min_rtt: number;
+    max_rtt: number;
+    avg_jitter: number;
+  }[];
+  probe_stats: {
+    probe_type: string;
+    target: string;
+    status: string;
+    count: number;
+    avg_rtt: number | null;
+    min_rtt: number | null;
+    max_rtt: number | null;
+  }[];
+  hourly_pattern: {
+    hour: string;
+    count: number;
+    avg_rtt: number;
+    max_rtt: number;
+    errors: number;
+  }[];
+  direction_asymmetry: {
+    hour: string;
+    direction: string;
+    avg_rtt: number;
+    count: number;
+  }[];
+  speed_test_stats: {
+    type: string;
+    count: number;
+    avg_dl: number;
+    min_dl: number;
+    max_dl: number;
+    avg_ul: number;
+    min_ul: number;
+    max_ul: number;
+  }[];
+  alert_summary: {
+    type: string;
+    severity: string;
+    count: number;
+    first_alert: string;
+    last_alert: string;
+    avg_value: number;
+    max_value: number;
+  }[];
+  recent_errors: {
+    timestamp: number;
+    probe_type: string;
+    target: string;
+    status: string;
+  }[];
 }

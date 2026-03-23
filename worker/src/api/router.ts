@@ -9,6 +9,7 @@ import { speedtestRoutes } from "@/api/speedtest";
 import { exportRoutes } from "@/api/export";
 import { commandRoutes } from "@/api/command";
 import { syncRoutes } from "@/api/sync";
+import { analysisRoutes } from "@/api/analysis";
 import { hashString } from "@/utils/hash";
 import { deleteClientCascade } from "@/utils/client-db";
 
@@ -64,6 +65,7 @@ export function createRouter() {
   // Protected routes — auth applied per-route-file via .use("*", authGuard)
   app.route("/api/clients", clientRoutes);
   app.route("/api/metrics", metricsRoutes);
+  app.route("/api/metrics", analysisRoutes);
   app.route("/api/alerts", alertRoutes);
   app.route("/api/speedtest", speedtestRoutes);
   // Also mount at /speedtest for client-facing payload endpoints (no /api prefix)

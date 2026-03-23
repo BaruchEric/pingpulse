@@ -1,4 +1,4 @@
-import type { Client, MetricsResponse, Alert, PingResult } from "@/lib/types";
+import type { Client, MetricsResponse, Alert, PingResult, AnalysisResponse } from "@/lib/types";
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -100,6 +100,22 @@ export const api = {
       buffer_size: number;
       disconnected_at: string | null;
     }>(`/api/command/${id}/status`),
+
+  // Analysis
+  getAnalysis: (id: string, from: string, to: string) =>
+    request<AnalysisResponse>(`/api/metrics/${id}/analysis?from=${from}&to=${to}`),
+
+  // Reports
+  generateReport: (id: string) =>
+    request<{ report: Record<string, unknown[]>; sent: Record<string, boolean> }>(
+      `/api/metrics/${id}/report`,
+      { method: "POST" }
+    ),
+  sendReport: (id: string, channel: "telegram" | "email" | "all") =>
+    request<{ report: Record<string, unknown[]>; sent: Record<string, boolean> }>(
+      `/api/metrics/${id}/report?send=${channel}`,
+      { method: "POST" }
+    ),
 
   // Export
   exportData: (id: string, format: "json" | "csv", from?: string, to?: string) => {

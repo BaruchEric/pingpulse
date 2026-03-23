@@ -298,6 +298,70 @@ export class ClientMonitor implements DurableObject {
   async alarm(): Promise<void> {
     await this.ensureConfigLoaded();
 
+    // Check for pending alert retry
+    const pendingRetry = await this.state.storage.get<{
+      alertId: string;
+      clientName?: string;
+      type: AlertRecord["type"];
+      severity: AlertRecord["severity"];
+      value: number;
+      threshold: number;
+      timestamp: string;
+      retryEmail: boolean;
+      retryTelegram: boolean;
+      restoreAlarmAt: number | null;
+    }>("pendingRetry");
+
+    if (pendingRetry) {
+      await this.state.storage.delete("pendingRetry");
+      try {
+        const scopedEnv = {
+          ...this.env,
+          TELEGRAM_BOT_TOKEN: pendingRetry.retryTelegram ? this.env.TELEGRAM_BOT_TOKEN : "",
+          TELEGRAM_CHAT_ID: pendingRetry.retryTelegram ? this.env.TELEGRAM_CHAT_ID : "",
+          RESEND_API_KEY: pendingRetry.retryEmail ? this.env.RESEND_API_KEY : "",
+        };
+
+        const result = await dispatchAlert(scopedEnv, {
+          alert_id: pendingRetry.alertId,
+          client_id: this.clientId,
+          client_name: pendingRetry.clientName,
+          type: pendingRetry.type,
+          severity: pendingRetry.severity,
+          value: pendingRetry.value,
+          threshold: pendingRetry.threshold,
+          timestamp: pendingRetry.timestamp,
+          message: "(retry)",
+        });
+
+        // Update delivery status with retry result
+        const updates: string[] = [];
+        const values: unknown[] = [];
+        if (pendingRetry.retryEmail) {
+          updates.push("delivered_email = ?");
+          values.push(result.email ? 1 : -1);
+        }
+        if (pendingRetry.retryTelegram) {
+          updates.push("delivered_telegram = ?");
+          values.push(result.telegram ? 1 : -1);
+        }
+        if (updates.length > 0) {
+          values.push(pendingRetry.alertId);
+          await this.env.DB.prepare(
+            `UPDATE alerts SET ${updates.join(", ")} WHERE id = ?`
+          ).bind(...values).run();
+        }
+      } catch (err) {
+        console.error(`[client-monitor] Alert retry failed for ${pendingRetry.alertId}:`, err);
+      }
+
+      // Restore the previous ping alarm that was overwritten
+      if (pendingRetry.restoreAlarmAt && pendingRetry.restoreAlarmAt > Date.now()) {
+        await this.state.storage.setAlarm(pendingRetry.restoreAlarmAt);
+        return; // Let the restored alarm fire normally
+      }
+    }
+
     // Check if this is a disconnection grace period check
     // Restore disconnectedAt from durable storage (survives hibernation)
     if (!this.disconnectedAt) {
@@ -723,6 +787,7 @@ export class ClientMonitor implements DurableObject {
           "down_alert_grace_seconds", "down_alert_channels",
           "down_alert_escalation_enabled", "down_alert_escalate_after_seconds",
           "down_alert_escalate_channels",
+          "report_schedule", "report_channels",
         ];
         const configUpdates: Partial<ClientConfig> = {};
         for (const key of allowed) {
@@ -828,7 +893,6 @@ export class ClientMonitor implements DurableObject {
     // Only dispatch notifications if enabled for this client
     if (this.config.notifications_enabled) {
       try {
-        // Look up client name for friendlier notifications
         const clientRow = await this.env.DB.prepare(
           "SELECT name FROM clients WHERE id = ?"
         )
@@ -837,7 +901,6 @@ export class ClientMonitor implements DurableObject {
 
         const channels = new Set(this.config.down_alert_channels ?? ["telegram"]);
 
-        // Escalation: add channels if client has been down long enough
         if (this.config.down_alert_escalation_enabled && type === "client_down") {
           const downDuration = (Date.now() - (this.disconnectedAt ?? Date.now())) / 1000;
           if (downDuration >= (this.config.down_alert_escalate_after_seconds ?? 600)) {
@@ -847,7 +910,6 @@ export class ClientMonitor implements DurableObject {
           }
         }
 
-        // Scope env to only have credentials for enabled channels
         const scopedEnv = {
           ...this.env,
           TELEGRAM_BOT_TOKEN: channels.has("telegram") ? this.env.TELEGRAM_BOT_TOKEN : "",
@@ -855,7 +917,7 @@ export class ClientMonitor implements DurableObject {
           RESEND_API_KEY: channels.has("email") ? this.env.RESEND_API_KEY : "",
         };
 
-        await dispatchAlert(scopedEnv, {
+        const result = await dispatchAlert(scopedEnv, {
           alert_id: alertId,
           client_id: this.clientId,
           client_name: clientRow?.name,
@@ -865,8 +927,38 @@ export class ClientMonitor implements DurableObject {
           threshold,
           timestamp,
         });
-      } catch {
-        // Best effort — alert is already stored in D1
+
+        // Update delivery status: 1 = success, 0 = not attempted, -1 = failed
+        const emailStatus = !channels.has("email") ? 0 : result.email ? 1 : -1;
+        const telegramStatus = !channels.has("telegram") ? 0 : result.telegram ? 1 : -1;
+
+        await this.env.DB.prepare(
+          "UPDATE alerts SET delivered_email = ?, delivered_telegram = ? WHERE id = ?"
+        )
+          .bind(emailStatus, telegramStatus, alertId)
+          .run();
+
+        // Retry failed channels for critical alerts via DO alarm
+        // DOs only support one alarm at a time, so we save the existing alarm
+        // and restore it after the retry fires in alarm()
+        if (severity === "critical" && (emailStatus === -1 || telegramStatus === -1)) {
+          const existingAlarm = await this.state.storage.getAlarm();
+          await this.state.storage.put("pendingRetry", {
+            alertId,
+            clientName: clientRow?.name,
+            type,
+            severity,
+            value,
+            threshold,
+            timestamp,
+            retryEmail: emailStatus === -1,
+            retryTelegram: telegramStatus === -1,
+            restoreAlarmAt: existingAlarm ?? null,
+          });
+          await this.state.storage.setAlarm(Date.now() + 5000);
+        }
+      } catch (err) {
+        console.error(`[client-monitor] Alert dispatch failed for ${alertId}:`, err);
       }
     }
   }
