@@ -813,7 +813,9 @@ export class ClientMonitor implements DurableObject {
   }
 
   private handleSpeedTestTrigger(): Response {
-    this.broadcast({ type: "start_speed_test", test_type: "full", target: "worker" });
+    for (const target of ["worker", "edge"] as const) {
+      this.broadcast({ type: "start_speed_test", test_type: "full", target });
+    }
     return new Response("OK");
   }
 

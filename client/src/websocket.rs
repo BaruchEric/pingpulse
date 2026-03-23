@@ -344,27 +344,32 @@ async fn connect_and_run(
 
             _ = speed_test_interval.tick() => {
                 info!(event = "speed_test_interval_trigger", test_type = "probe");
-                let http = http.clone();
+                let probe_size = config.speed_test.probe_size_bytes;
                 let base_url = config.server.base_url.clone();
                 let client_id = config.server.client_id.clone();
-                let probe_size = config.speed_test.probe_size_bytes;
-                let tx = speed_tx.clone();
 
-                tokio::spawn(async move {
-                    let result = speed_test::run_probe(&http, &base_url, &client_id, probe_size, SpeedTestTarget::Worker).await;
-                    let msg = match result {
-                        Ok(result) => OutgoingMessage::SpeedTestResult { result },
-                        Err(e) => {
-                            error!(event = "speed_test_interval_error", error = %e);
-                            OutgoingMessage::Error {
-                                message: format!("Speed test failed: {e}"),
+                for target in [SpeedTestTarget::Worker, SpeedTestTarget::Edge] {
+                    let http = http.clone();
+                    let base_url = base_url.clone();
+                    let client_id = client_id.clone();
+                    let tx = speed_tx.clone();
+
+                    tokio::spawn(async move {
+                        let result = speed_test::run_probe(&http, &base_url, &client_id, probe_size, target).await;
+                        let msg = match result {
+                            Ok(result) => OutgoingMessage::SpeedTestResult { result },
+                            Err(e) => {
+                                error!(event = "speed_test_interval_error", target = ?target, error = %e);
+                                OutgoingMessage::Error {
+                                    message: format!("Speed test failed: {e}"),
+                                }
                             }
+                        };
+                        if tx.send(msg).is_err() {
+                            warn!(event = "speed_test_channel_closed");
                         }
-                    };
-                    if tx.send(msg).is_err() {
-                        warn!(event = "speed_test_channel_closed");
-                    }
-                });
+                    });
+                }
             }
 
             Some(msg) = speed_rx.recv() => {
