@@ -1,6 +1,8 @@
 import type { Env } from "@/index";
-import type { AlertType, AlertSeverity } from "@/types";
+import type { AlertType, AlertSeverity, ClientConfig } from "@/types";
+import { DEFAULT_CLIENT_CONFIG } from "@/types";
 import { sendTelegramMessage, sendResendEmail } from "@/services/notify";
+import { getMuteUntil } from "@/services/bot-settings";
 
 export interface AlertPayload {
   alert_id: string;
@@ -12,6 +14,7 @@ export interface AlertPayload {
   threshold: number;
   timestamp: string;
   message?: string;
+  config?: Partial<ClientConfig>;
 }
 
 export interface DispatchResult {
@@ -59,10 +62,19 @@ export async function dispatchAlert(
   }
 
   if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
-    promises.push(
-      sendTelegramMessage(env, message)
-        .then((ok) => { result.telegram = ok; })
-    );
+    // Check mute status (critical alerts always go through)
+    const muteUntil = await getMuteUntil(env.DB);
+    const isMuted = muteUntil !== null && alert.severity !== "critical";
+
+    if (!isMuted) {
+      const soundConfig = alert.config?.telegram_notification_sound
+        ?? DEFAULT_CLIENT_CONFIG.telegram_notification_sound;
+      const silent = soundConfig[alert.type] === "silent";
+      promises.push(
+        sendTelegramMessage(env, message, { silent })
+          .then((ok) => { result.telegram = ok; })
+      );
+    }
   }
 
   await Promise.allSettled(promises);

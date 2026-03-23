@@ -1,6 +1,16 @@
 import type { Env } from "@/index";
 
-export async function sendTelegramMessage(env: Env, text: string): Promise<boolean> {
+export interface TelegramMessageOptions {
+  silent?: boolean;
+  parse_mode?: "HTML" | "MarkdownV2";
+  reply_markup?: unknown;
+}
+
+export async function sendTelegramMessage(
+  env: Env,
+  text: string,
+  options?: TelegramMessageOptions
+): Promise<boolean> {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return false;
   try {
     const res = await fetch(
@@ -8,7 +18,13 @@ export async function sendTelegramMessage(env: Env, text: string): Promise<boole
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text }),
+        body: JSON.stringify({
+          chat_id: env.TELEGRAM_CHAT_ID,
+          text,
+          disable_notification: options?.silent ?? false,
+          parse_mode: options?.parse_mode,
+          reply_markup: options?.reply_markup,
+        }),
       }
     );
     if (!res.ok) throw new Error(`Telegram API returned ${res.status}`);

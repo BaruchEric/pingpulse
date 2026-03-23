@@ -10,6 +10,7 @@ import { exportRoutes } from "@/api/export";
 import { commandRoutes } from "@/api/command";
 import { syncRoutes } from "@/api/sync";
 import { analysisRoutes } from "@/api/analysis";
+import { telegramRoutes } from "@/api/telegram";
 import { hashString } from "@/utils/hash";
 import { deleteClientCascade } from "@/utils/client-db";
 
@@ -72,6 +73,7 @@ export function createRouter() {
   app.route("/speedtest", speedtestRoutes);
   app.route("/api/export", exportRoutes);
   app.route("/api/command", commandRoutes);
+  app.route("/api/telegram", telegramRoutes);
 
   return app;
 }

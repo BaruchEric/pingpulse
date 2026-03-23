@@ -53,6 +53,9 @@ export interface ClientConfig {
   // Health report config
   report_schedule: "daily" | "6h" | "weekly" | "off";
   report_channels: ("telegram" | "email")[];
+
+  // Per-alert-type Telegram notification sound
+  telegram_notification_sound: Record<AlertType, "default" | "silent">;
 }
 
 export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
@@ -75,6 +78,14 @@ export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   down_alert_escalate_channels: ["email"],
   report_schedule: "daily",
   report_channels: ["telegram", "email"],
+  telegram_notification_sound: {
+    client_down: "default",
+    client_up: "silent",
+    high_latency: "default",
+    packet_loss: "default",
+    speed_degradation: "silent",
+    latency_recovered: "silent",
+  },
 };
 
 export interface PingResult {

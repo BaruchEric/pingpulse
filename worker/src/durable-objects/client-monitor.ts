@@ -332,6 +332,7 @@ export class ClientMonitor implements DurableObject {
           threshold: pendingRetry.threshold,
           timestamp: pendingRetry.timestamp,
           message: "(retry)",
+          config: this.config,
         });
 
         // Update delivery status with retry result
@@ -926,6 +927,7 @@ export class ClientMonitor implements DurableObject {
           value,
           threshold,
           timestamp,
+          config: this.config,
         });
 
         // Update delivery status: 1 = success, 0 = not attempted, -1 = failed

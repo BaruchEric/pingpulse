@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { dispatchAlert, type AlertPayload } from "@/services/alert-dispatch";
 import type { Env } from "@/index";
 
+const mockDB = {
+  prepare: () => ({
+    first: () => Promise.resolve(null),
+  }),
+} as unknown as D1Database;
+
 const baseAlert: AlertPayload = {
   alert_id: "test-1",
   client_id: "client-1",
@@ -28,6 +34,7 @@ describe("dispatchAlert", () => {
     fetchSpy.mockResolvedValue(new Response("ok", { status: 200 }));
 
     const env = {
+      DB: mockDB,
       RESEND_API_KEY: "re_test",
       ALERT_FROM_EMAIL: "from@test.com",
       ALERT_TO_EMAIL: "to@test.com",
@@ -48,6 +55,7 @@ describe("dispatchAlert", () => {
     });
 
     const env = {
+      DB: mockDB,
       RESEND_API_KEY: "re_test",
       TELEGRAM_BOT_TOKEN: "bot123",
       TELEGRAM_CHAT_ID: "chat456",
