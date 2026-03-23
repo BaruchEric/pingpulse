@@ -39,12 +39,12 @@ export function Settings() {
         <h2 className="text-sm font-medium text-zinc-400">Account</h2>
         <form onSubmit={handlePasswordChange} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
           <div>
-            <label className="block text-xs text-zinc-500">Current Password</label>
+            <label className="block text-xs text-zinc-400">Current Password</label>
             <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
               className="mt-1 w-full max-w-xs rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 focus:border-[var(--color-accent)] focus:outline-none" />
           </div>
           <div>
-            <label className="block text-xs text-zinc-500">New Password</label>
+            <label className="block text-xs text-zinc-400">New Password</label>
             <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
               className="mt-1 w-full max-w-xs rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 focus:border-[var(--color-accent)] focus:outline-none" />
           </div>
@@ -107,7 +107,7 @@ export function Settings() {
             <span>R2 Archive (gzipped exports)</span>
             <span className="font-mono text-zinc-300">Unlimited</span>
           </div>
-          <p className="pt-2 text-xs text-zinc-600">
+          <p className="pt-2 text-xs text-zinc-400">
             Retention periods are managed by the cron job. Adjust in Worker configuration.
           </p>
         </div>
@@ -119,7 +119,7 @@ export function Settings() {
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
           <div className="flex items-end gap-4">
             <div>
-              <label className="block text-xs text-zinc-500">From</label>
+              <label className="block text-xs text-zinc-400">From</label>
               <input
                 type="date"
                 value={exportFrom}
@@ -128,7 +128,7 @@ export function Settings() {
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-500">To</label>
+              <label className="block text-xs text-zinc-400">To</label>
               <input
                 type="date"
                 value={exportTo}
@@ -154,7 +154,7 @@ export function Settings() {
               </div>
             ))
           ) : (
-            <p className="text-sm text-zinc-500">No clients to export</p>
+            <p className="text-sm text-zinc-400">No clients to export</p>
           )}
         </div>
       </section>
@@ -164,7 +164,7 @@ export function Settings() {
         <h2 className="text-sm font-medium text-zinc-400">About</h2>
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 text-sm text-zinc-400">
           <p>PingPulse — Bidirectional network monitoring</p>
-          <p className="mt-1 font-mono text-xs text-zinc-600">Dashboard served from Cloudflare Workers</p>
+          <p className="mt-1 font-mono text-xs text-zinc-400">Dashboard served from Cloudflare Workers</p>
         </div>
       </section>
     </div>

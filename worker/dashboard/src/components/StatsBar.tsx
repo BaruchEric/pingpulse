@@ -29,7 +29,7 @@ function Stat({ label, value, className = "" }: { label: string; value: number |
   return (
     <div className="text-center">
       <div className={`text-2xl font-bold font-mono ${className}`}>{value}</div>
-      <div className="text-xs text-zinc-500">{label}</div>
+      <div className="text-xs text-zinc-400">{label}</div>
     </div>
   );
 }

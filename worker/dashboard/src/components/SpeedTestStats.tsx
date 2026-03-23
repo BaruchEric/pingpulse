@@ -1,13 +1,13 @@
 import type { AnalysisResponse } from "@/lib/types";
 
 export function SpeedTestStats({ stats }: { stats: AnalysisResponse["speed_test_stats"] }) {
-  if (stats.length === 0) return <div className="text-sm text-zinc-500">No speed test data</div>;
+  if (stats.length === 0) return <div className="text-sm text-zinc-400">No speed test data</div>;
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-xs text-zinc-500 border-b border-zinc-800">
+          <tr className="text-left text-xs text-zinc-400 border-b border-zinc-800">
             <th className="py-2 pr-3">Type</th>
             <th className="py-2 pr-3 text-right">Count</th>
             <th className="py-2 pr-3 text-right">Avg DL</th>

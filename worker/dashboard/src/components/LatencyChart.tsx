@@ -36,7 +36,7 @@ export function LatencyChart({ pings }: { pings: PingResult[] }) {
   useUPlotChart(containerRef, () => OPTS, data);
 
   if (pings.length === 0) {
-    return <div className="flex h-[280px] items-center justify-center text-sm text-zinc-500">No ping data</div>;
+    return <div className="flex h-[280px] items-center justify-center text-sm text-zinc-400">No ping data</div>;
   }
 
   return <div ref={containerRef} />;

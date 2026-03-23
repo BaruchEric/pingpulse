@@ -43,7 +43,7 @@ export function DirectionAsymmetry({ data: raw }: { data: AnalysisResponse["dire
   useUPlotChart(containerRef, () => OPTS, chartData);
 
   if (raw.length === 0) {
-    return <div className="flex h-[280px] items-center justify-center text-sm text-zinc-500">No direction data</div>;
+    return <div className="flex h-[280px] items-center justify-center text-sm text-zinc-400">No direction data</div>;
   }
 
   return <div ref={containerRef} />;

@@ -1,7 +1,7 @@
 import type { AnalysisResponse } from "@/lib/types";
 
 export function AlertStormSummary({ summary }: { summary: AnalysisResponse["alert_summary"] }) {
-  if (summary.length === 0) return <div className="text-sm text-zinc-500">No alerts in this period</div>;
+  if (summary.length === 0) return <div className="text-sm text-zinc-400">No alerts in this period</div>;
 
   const totalAlerts = summary.reduce((sum, a) => sum + a.count, 0);
 
@@ -13,7 +13,7 @@ export function AlertStormSummary({ summary }: { summary: AnalysisResponse["aler
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-xs text-zinc-500 border-b border-zinc-800">
+            <tr className="text-left text-xs text-zinc-400 border-b border-zinc-800">
               <th className="py-2 pr-3">Type</th>
               <th className="py-2 pr-3">Severity</th>
               <th className="py-2 pr-3 text-right">Count</th>
@@ -31,8 +31,8 @@ export function AlertStormSummary({ summary }: { summary: AnalysisResponse["aler
                 <td className="py-2 pr-3 text-right font-mono text-zinc-300">{a.count}</td>
                 <td className="py-2 pr-3 text-right font-mono text-zinc-300">{a.avg_value.toFixed(1)}</td>
                 <td className="py-2 pr-3 text-right font-mono text-zinc-300">{a.max_value}</td>
-                <td className="py-2 pr-3 text-xs font-mono text-zinc-500">{new Date(a.first_alert).toLocaleTimeString()}</td>
-                <td className="py-2 text-xs font-mono text-zinc-500">{new Date(a.last_alert).toLocaleTimeString()}</td>
+                <td className="py-2 pr-3 text-xs font-mono text-zinc-400">{new Date(a.first_alert).toLocaleTimeString()}</td>
+                <td className="py-2 text-xs font-mono text-zinc-400">{new Date(a.last_alert).toLocaleTimeString()}</td>
               </tr>
             ))}
           </tbody>

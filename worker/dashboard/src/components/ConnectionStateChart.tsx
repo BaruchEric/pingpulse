@@ -52,7 +52,7 @@ export function ConnectionStateChart({
       <div>
         <h2 className="mb-3 text-sm font-medium text-zinc-400">Connection State</h2>
         {pings.length === 0 ? (
-          <div className="flex h-[220px] items-center justify-center text-sm text-zinc-500">
+          <div className="flex h-[220px] items-center justify-center text-sm text-zinc-400">
             No connection data
           </div>
         ) : (
@@ -62,7 +62,7 @@ export function ConnectionStateChart({
 
       {recentOutages.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-medium text-zinc-500">Recent Outages</h3>
+          <h3 className="mb-2 text-xs font-medium text-zinc-400">Recent Outages</h3>
           <div className="space-y-1">
             {recentOutages.map((outage, i) => {
               const start = new Date(outage.start_ts);
@@ -81,7 +81,7 @@ export function ConnectionStateChart({
                       {start.toLocaleTimeString()}
                     </span>
                     {end && (
-                      <span className="text-xs text-zinc-600">
+                      <span className="text-xs text-zinc-400">
                         &rarr; {end.toLocaleTimeString()}
                       </span>
                     )}

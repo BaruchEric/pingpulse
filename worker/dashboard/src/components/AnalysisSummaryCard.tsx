@@ -40,9 +40,9 @@ export function AnalysisSummaryCard({
             }`}
           >
             <div className={`text-lg font-bold font-mono ${c.highlight ? "text-red-400" : "text-zinc-100"}`}>{c.value}</div>
-            <div className={`text-xs ${c.highlight ? "text-red-400/70 font-semibold" : "text-zinc-500"}`}>
+            <div className={`text-xs ${c.highlight ? "text-red-400/70 font-semibold" : "text-zinc-400"}`}>
               {c.label}
-              {clickable && <span className="ml-1 text-zinc-600">→</span>}
+              {clickable && <span className="ml-1 text-zinc-400">→</span>}
             </div>
           </div>
         );

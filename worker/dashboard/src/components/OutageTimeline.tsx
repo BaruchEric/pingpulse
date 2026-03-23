@@ -17,7 +17,7 @@ export function OutageTimeline({
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-zinc-500">Uptime Timeline</div>
+      <div className="text-xs text-zinc-400">Uptime Timeline</div>
       <div className="relative h-6 w-full overflow-hidden rounded-md bg-emerald-950/30 border border-emerald-900/30">
         {outages.map((outage, i) => {
           const oStart = new Date(outage.start_ts).getTime();
@@ -35,7 +35,7 @@ export function OutageTimeline({
           );
         })}
       </div>
-      <div className="flex justify-between text-xs text-zinc-600 font-mono">
+      <div className="flex justify-between text-xs text-zinc-400 font-mono">
         <span>{new Date(from).toLocaleTimeString()}</span>
         <span>{new Date(to).toLocaleTimeString()}</span>
       </div>

@@ -20,7 +20,7 @@ export function Overview() {
         <h1 className="text-xl font-semibold">Overview</h1>
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-8 text-center">
           <p className="text-zinc-400">No clients registered yet.</p>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-zinc-400">
             Go to <a href="/clients" className="text-[var(--color-accent)] hover:underline">Client Management</a> to register your first client.
           </p>
         </div>

@@ -130,23 +130,23 @@ export function Alerts() {
         <h2 className="mb-3 text-sm font-medium text-zinc-400">Default Alert Thresholds</h2>
         <div className="flex items-end gap-4">
           <div>
-            <label className="block text-xs text-zinc-500">Latency (ms)</label>
+            <label className="block text-xs text-zinc-400">Latency (ms)</label>
             <input
               type="number"
               value={latencyThreshold}
               onChange={(e) => setLatencyThreshold(e.target.value)}
               placeholder="100"
-              className="mt-1 w-32 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 font-mono placeholder:text-zinc-600 focus:border-[var(--color-accent)] focus:outline-none"
+              className="mt-1 w-32 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 font-mono placeholder:text-zinc-400 focus:border-[var(--color-accent)] focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-xs text-zinc-500">Packet Loss (%)</label>
+            <label className="block text-xs text-zinc-400">Packet Loss (%)</label>
             <input
               type="number"
               value={lossThreshold}
               onChange={(e) => setLossThreshold(e.target.value)}
               placeholder="5"
-              className="mt-1 w-32 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 font-mono placeholder:text-zinc-600 focus:border-[var(--color-accent)] focus:outline-none"
+              className="mt-1 w-32 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 font-mono placeholder:text-zinc-400 focus:border-[var(--color-accent)] focus:outline-none"
             />
           </div>
           <button
@@ -169,10 +169,10 @@ export function Alerts() {
       {/* Telegram notifications */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
         <h2 className="mb-1 text-sm font-medium text-zinc-400">Telegram Notifications</h2>
-        <p className="mb-3 text-xs text-zinc-500">Control which alerts send and whether they play sound. Critical alerts always send regardless of mute.</p>
+        <p className="mb-3 text-xs text-zinc-400">Control which alerts send and whether they play sound. Critical alerts always send regardless of mute.</p>
         <div className="flex items-center justify-end gap-1 px-3 pb-1">
-          <span className="text-[10px] uppercase tracking-wider text-zinc-600 w-14 text-center">Sound</span>
-          <span className="text-[10px] uppercase tracking-wider text-zinc-600 w-14 text-center">Notify</span>
+          <span className="text-[10px] uppercase tracking-wider text-zinc-400 w-14 text-center">Sound</span>
+          <span className="text-[10px] uppercase tracking-wider text-zinc-400 w-14 text-center">Notify</span>
         </div>
         <div className="space-y-2">
           {ALERT_TYPES.map(({ key, label }) => {
@@ -232,7 +232,7 @@ export function Alerts() {
         <h2 className="mb-3 text-sm font-medium text-zinc-400">Health Reports</h2>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-zinc-500">Schedule</label>
+            <label className="block text-xs text-zinc-400">Schedule</label>
             <select
               value={reportSchedule}
               onChange={(e) => setReportSchedule(e.target.value)}
@@ -290,7 +290,7 @@ export function Alerts() {
       <div className="space-y-2">
         <h2 className="text-sm font-medium text-zinc-400">Alert History</h2>
         {loading && !alerts ? (
-          <div className="text-sm text-zinc-500">Loading...</div>
+          <div className="text-sm text-zinc-400">Loading...</div>
         ) : alerts && alerts.length > 0 ? (
           <div className="space-y-2">
             {alerts.map((alert) => (
@@ -298,7 +298,7 @@ export function Alerts() {
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 text-center text-sm text-zinc-500">
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 text-center text-sm text-zinc-400">
             No alerts yet
           </div>
         )}

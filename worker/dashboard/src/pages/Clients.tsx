@@ -77,7 +77,7 @@ export function Clients() {
       {clients && clients.length > 0 ? (
         <div className="overflow-x-auto rounded-lg border border-zinc-800">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-900/80 text-left text-xs text-zinc-500">
+            <thead className="bg-zinc-900/80 text-left text-xs text-zinc-400">
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Location</th>
@@ -116,7 +116,7 @@ export function Clients() {
                     <StatusBadge lastSeen={client.last_seen} pingIntervalMs={client.config.ping_interval_s * 1000} />
                   </td>
                   <td className="px-4 py-3 font-mono text-zinc-400">{client.config.ping_interval_s}s</td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-500">
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-400">
                     {new Date(client.last_seen).toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-right space-x-3">

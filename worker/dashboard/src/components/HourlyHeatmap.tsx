@@ -37,7 +37,7 @@ export function HourlyHeatmap({ pattern }: { pattern: AnalysisResponse["hourly_p
   useUPlotChart(containerRef, () => OPTS, data);
 
   if (pattern.length === 0) {
-    return <div className="flex h-[280px] items-center justify-center text-sm text-zinc-500">No hourly data</div>;
+    return <div className="flex h-[280px] items-center justify-center text-sm text-zinc-400">No hourly data</div>;
   }
 
   return <div ref={containerRef} />;

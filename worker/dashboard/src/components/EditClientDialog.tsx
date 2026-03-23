@@ -33,7 +33,7 @@ const DEFAULT_ENABLED: Record<AlertType, boolean> = {
 const inputCls =
   "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 focus:border-[var(--color-accent)] focus:outline-none";
 const inputMonoCls = `${inputCls} font-mono`;
-const labelCls = "block text-xs text-zinc-500";
+const labelCls = "block text-xs text-zinc-400";
 
 function Toggle({
   checked,
@@ -55,7 +55,7 @@ function Toggle({
         />
         <div className="h-5 w-9 rounded-full bg-zinc-700 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-zinc-400 after:transition-all peer-checked:bg-[var(--color-accent)] peer-checked:after:translate-x-full peer-checked:after:bg-white" />
       </label>
-      <span className="text-sm text-zinc-400">{label}</span>
+      <span className="text-sm text-zinc-300">{label}</span>
     </div>
   );
 }
@@ -168,7 +168,7 @@ export function EditClientDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
@@ -207,7 +207,7 @@ export function EditClientDialog({
           </div>
 
           <fieldset className="space-y-3 rounded-lg border border-zinc-800 p-4">
-            <legend className="px-2 text-xs font-medium text-zinc-400">Probe Config</legend>
+            <legend className="px-2 text-xs font-medium text-zinc-300">Probe Config</legend>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>ICMP Interval (s)</label>
@@ -235,7 +235,7 @@ export function EditClientDialog({
           <Toggle checked={notificationsEnabled} onChange={setNotificationsEnabled} label="Send notifications (Email & Telegram)" />
 
           <fieldset className="space-y-3 rounded-lg border border-zinc-800 p-4">
-            <legend className="px-2 text-xs font-medium text-zinc-400">Down Alerts</legend>
+            <legend className="px-2 text-xs font-medium text-zinc-300">Down Alerts</legend>
             <div>
               <label className={labelCls}>Grace Period (s)</label>
               <input type="number" min="30" value={gracePeriod} onChange={(e) => setGracePeriod(e.target.value)} className={inputMonoCls} />
@@ -243,11 +243,11 @@ export function EditClientDialog({
             <div className="space-y-2">
               <span className={labelCls}>Alert Channels</span>
               <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm text-zinc-400">
+                <label className="flex items-center gap-2 text-sm text-zinc-300">
                   <input type="checkbox" checked={alertTelegram} onChange={(e) => setAlertTelegram(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
                   Telegram
                 </label>
-                <label className="flex items-center gap-2 text-sm text-zinc-400">
+                <label className="flex items-center gap-2 text-sm text-zinc-300">
                   <input type="checkbox" checked={alertEmail} onChange={(e) => setAlertEmail(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
                   Email
                 </label>
@@ -261,11 +261,11 @@ export function EditClientDialog({
                   <input type="number" min="60" value={escalationDelay} onChange={(e) => setEscalationDelay(e.target.value)} className={inputMonoCls} />
                 </div>
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2 text-sm text-zinc-400">
+                  <label className="flex items-center gap-2 text-sm text-zinc-300">
                     <input type="checkbox" checked={escalationTelegram} onChange={(e) => setEscalationTelegram(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
                     Telegram
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-zinc-400">
+                  <label className="flex items-center gap-2 text-sm text-zinc-300">
                     <input type="checkbox" checked={escalationEmail} onChange={(e) => setEscalationEmail(e.target.checked)} className="rounded border-zinc-600 bg-zinc-800" />
                     Email
                   </label>
@@ -275,7 +275,7 @@ export function EditClientDialog({
           </fieldset>
 
           <fieldset className="space-y-3 rounded-lg border border-zinc-800 p-4">
-            <legend className="px-2 text-xs font-medium text-zinc-400">Retention</legend>
+            <legend className="px-2 text-xs font-medium text-zinc-300">Retention</legend>
             <div>
               <label className={labelCls}>Raw Data Retention (days)</label>
               <input type="number" min="1" value={retentionDays} onChange={(e) => setRetentionDays(e.target.value)} className={inputMonoCls} />
@@ -284,11 +284,11 @@ export function EditClientDialog({
           </fieldset>
 
           <fieldset className="space-y-2 rounded-lg border border-zinc-800 p-4">
-            <legend className="px-2 text-xs font-medium text-zinc-400">Telegram Notifications</legend>
-            <p className="text-xs text-zinc-500">Control which alerts send and whether they play sound. Critical alerts always send regardless of mute.</p>
+            <legend className="px-2 text-xs font-medium text-zinc-300">Telegram Notifications</legend>
+            <p className="text-xs text-zinc-400">Control which alerts send and whether they play sound. Critical alerts always send regardless of mute.</p>
             <div className="flex items-center justify-end gap-1 px-3 pb-1">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-600 w-14 text-center">Sound</span>
-              <span className="text-[10px] uppercase tracking-wider text-zinc-600 w-14 text-center">Notify</span>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 w-14 text-center">Sound</span>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 w-14 text-center">Notify</span>
             </div>
             {ALERT_SOUND_OPTIONS.map(({ key, label, thresholdField, unit }) => {
               const thresholdValues = { latencyThreshold, lossThreshold };
@@ -296,7 +296,7 @@ export function EditClientDialog({
               const enabled = notifyEnabled[key];
               return (
                 <div key={key} className={`flex items-center justify-between rounded-md border border-zinc-800 px-3 py-1.5 ${!enabled ? "opacity-50" : ""}`}>
-                  <span className="text-sm text-zinc-300">{label}</span>
+                  <span className="text-sm text-zinc-200">{label}</span>
                   <div className="flex items-center gap-2">
                     {thresholdField && (
                       <div className="flex items-center gap-1">
@@ -306,7 +306,7 @@ export function EditClientDialog({
                           onChange={(e) => thresholdSetters[thresholdField](e.target.value)}
                           className="w-16 rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs font-mono text-zinc-200 focus:border-[var(--color-accent)] focus:outline-none"
                         />
-                        <span className="text-xs text-zinc-500">{unit}</span>
+                        <span className="text-xs text-zinc-400">{unit}</span>
                       </div>
                     )}
                     {/* Sound toggle */}

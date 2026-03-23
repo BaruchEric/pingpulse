@@ -108,7 +108,7 @@ export function RegisterDialog({ onClose }: { onClose: () => void }) {
               </button>
             </div>
 
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-zinc-400">
               Token expires in 15 minutes and can only be used once.
               You'll be prompted for a client name and location.
             </p>

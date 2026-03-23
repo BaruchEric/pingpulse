@@ -154,9 +154,9 @@ export function WanQualityChart({
         </div>
       </div>
       {loading && probes.length === 0 ? (
-        <div className="flex h-[280px] items-center justify-center text-sm text-zinc-500">Loading...</div>
+        <div className="flex h-[280px] items-center justify-center text-sm text-zinc-400">Loading...</div>
       ) : probes.length === 0 ? (
-        <div className="flex h-[280px] items-center justify-center text-sm text-zinc-500">No probe data</div>
+        <div className="flex h-[280px] items-center justify-center text-sm text-zinc-400">No probe data</div>
       ) : (
         <div ref={containerRef} />
       )}

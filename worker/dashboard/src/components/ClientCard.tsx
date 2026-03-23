@@ -21,9 +21,9 @@ export function ClientCard({
       <div className="flex items-start justify-between">
         <div>
           <h3 className="font-medium">{client.name}</h3>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-zinc-400">
             {client.location}
-            {client.client_version && <span className="ml-2 text-zinc-600">v{client.client_version}</span>}
+            {client.client_version && <span className="ml-2 text-zinc-400">v{client.client_version}</span>}
           </p>
         </div>
         <StatusBadge
@@ -36,18 +36,18 @@ export function ClientCard({
       {/* Stats row */}
       {client.stats && (
         <div className="flex gap-4 text-xs">
-          <div className="text-zinc-500">
+          <div className="text-zinc-400">
             RTT: <span className="font-mono text-zinc-300">
               {client.stats.avg_rtt_ms != null ? `${client.stats.avg_rtt_ms.toFixed(1)}ms` : "—"}
             </span>
           </div>
-          <div className="text-zinc-500">
+          <div className="text-zinc-400">
             Loss: <span className="font-mono text-zinc-300">
               {client.stats.loss_pct != null ? `${client.stats.loss_pct.toFixed(1)}%` : "—"}
             </span>
           </div>
           {client.stats.last_speed_test && (
-            <div className="text-zinc-500">
+            <div className="text-zinc-400">
               DL: <span className="font-mono text-zinc-300">
                 {client.stats.last_speed_test.download_mbps.toFixed(0)} Mbps
               </span>
@@ -57,7 +57,7 @@ export function ClientCard({
       )}
 
       <div className="flex items-end justify-between">
-        <div className="text-xs text-zinc-500">
+        <div className="text-xs text-zinc-400">
           Last seen: <span className="font-mono text-zinc-300">{timeSince}</span>
         </div>
         {latencyHistory && latencyHistory.length > 1 && (

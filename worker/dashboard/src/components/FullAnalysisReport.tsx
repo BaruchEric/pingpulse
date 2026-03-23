@@ -59,11 +59,11 @@ function detectErrorBursts(
   return bursts.map((b) => ({ start: b.start, end: b.end, count: b.count, targets: [...b.targets] }));
 }
 
-const TH = "px-3 py-2 text-left text-xs text-zinc-500 font-medium";
-const TH_R = "px-3 py-2 text-right text-xs text-zinc-500 font-medium";
+const TH = "px-3 py-2 text-left text-xs text-zinc-400 font-medium";
+const TH_R = "px-3 py-2 text-right text-xs text-zinc-400 font-medium";
 const TD = "px-3 py-2 text-sm text-zinc-300 font-mono";
 const TD_R = "px-3 py-2 text-sm text-zinc-300 font-mono text-right";
-const TD_MUTED = "px-3 py-2 text-sm text-zinc-500 font-mono";
+const TD_MUTED = "px-3 py-2 text-sm text-zinc-400 font-mono";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -241,7 +241,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
             className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               page === p.id
                 ? "bg-zinc-700 text-zinc-100"
-                : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+                : "text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50"
             }`}
           >
             {p.label}
@@ -254,24 +254,24 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
           <Section title={`Deep Analysis: ${client.name}${client.location ? ` (${client.location})` : ""}`}>
             <div className="grid grid-cols-1 gap-x-8 gap-y-1 text-sm sm:grid-cols-2">
               <div>
-                <span className="text-zinc-500">Client: </span>
+                <span className="text-zinc-400">Client: </span>
                 <span className="font-mono text-zinc-400 text-xs">{client.id}</span>
               </div>
               <div>
-                <span className="text-zinc-500">Version: </span>
+                <span className="text-zinc-400">Version: </span>
                 <span className="text-zinc-300">{client.client_version || "—"}</span>
               </div>
               <div>
-                <span className="text-zinc-500">Created: </span>
+                <span className="text-zinc-400">Created: </span>
                 <span className="text-zinc-300">{fmtTs(client.created_at)}</span>
               </div>
               <div>
-                <span className="text-zinc-500">Last seen: </span>
+                <span className="text-zinc-400">Last seen: </span>
                 <span className="text-zinc-300">{fmtTs(client.last_seen)}</span>
               </div>
               <div className="sm:col-span-2">
-                <span className="text-zinc-500">Config: </span>
-                <span className="text-zinc-400 text-xs">
+                <span className="text-zinc-400">Config: </span>
+                <span className="text-zinc-300 text-xs">
                   {client.config.ping_interval_s}s ping interval,{" "}
                   {client.config.speed_test_interval_s}s probe speed tests,{" "}
                   full speed test {client.config.full_test_schedule},{" "}
@@ -385,7 +385,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
 
           {cfToDist.length === 0 && toCfDist.length === 0 && hourlyRows.length === 0 && (
             <Section title="Latency">
-              <p className="text-sm text-zinc-500">No latency distribution or hourly data available.</p>
+              <p className="text-sm text-zinc-400">No latency distribution or hourly data available.</p>
             </Section>
           )}
         </>
@@ -425,18 +425,18 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
                   <div key={i} className="rounded border border-amber-800/50 bg-amber-950/20 p-3">
                     <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
                       <div>
-                        <span className="text-zinc-500">Window: </span>
+                        <span className="text-zinc-400">Window: </span>
                         <span className="font-mono text-zinc-300">
                           {new Date(b.start).toLocaleTimeString()} — {new Date(b.end).toLocaleTimeString()}
                         </span>
-                        <span className="ml-2 text-zinc-500">({fmtDuration((b.end - b.start) / 1000)})</span>
+                        <span className="ml-2 text-zinc-400">({fmtDuration((b.end - b.start) / 1000)})</span>
                       </div>
                       <div>
-                        <span className="text-zinc-500">Errors: </span>
+                        <span className="text-zinc-400">Errors: </span>
                         <span className="font-mono text-amber-400">{b.count}</span>
                       </div>
                     </div>
-                    <div className="mt-1 text-xs text-zinc-500">
+                    <div className="mt-1 text-xs text-zinc-400">
                       Targets: {b.targets.join(", ")}
                     </div>
                     {b.targets.length >= 3 && (
@@ -450,7 +450,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
 
               {probeErrors.length > 0 && (
                 <div className="mt-4">
-                  <h4 className="mb-2 text-xs font-medium text-zinc-500">Error Totals by Target</h4>
+                  <h4 className="mb-2 text-xs font-medium text-zinc-400">Error Totals by Target</h4>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
@@ -514,7 +514,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
                           {a.severity}
                         </td>
                         <td className={TD_R}>{a.count}</td>
-                        <td className="px-3 py-2 text-xs font-mono text-zinc-500">
+                        <td className="px-3 py-2 text-xs font-mono text-zinc-400">
                           {fmtTs(a.first_alert)} → {fmtTs(a.last_alert)}
                         </td>
                         <td className={TD_R}>{fmt(a.avg_value)}</td>
@@ -531,7 +531,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
             <Section title="Speed Tests">
               {data.full_speed_tests && data.full_speed_tests.length > 0 && (
                 <div className="mb-4">
-                  <h4 className="mb-2 text-xs font-medium text-zinc-500">
+                  <h4 className="mb-2 text-xs font-medium text-zinc-400">
                     Full Tests ({data.full_speed_tests.length})
                   </h4>
                   <div className="overflow-x-auto">
@@ -559,7 +559,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
 
               {data.speed_test_stats.length > 0 && (
                 <div>
-                  <h4 className="mb-2 text-xs font-medium text-zinc-500">Aggregate by Type</h4>
+                  <h4 className="mb-2 text-xs font-medium text-zinc-400">Aggregate by Type</h4>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
@@ -597,7 +597,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
 
           {data.alert_summary.length === 0 && (data.full_speed_tests?.length ?? 0) === 0 && data.speed_test_stats.length === 0 && (
             <Section title="Speed & Alerts">
-              <p className="text-sm text-zinc-500">No speed test or alert data available.</p>
+              <p className="text-sm text-zinc-400">No speed test or alert data available.</p>
             </Section>
           )}
         </>
@@ -611,7 +611,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
         >
           Previous
         </button>
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-zinc-400">
           {pageIdx + 1} / {PAGES.length}
         </span>
         <button

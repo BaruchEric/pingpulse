@@ -140,11 +140,11 @@ export function LocalClientPanel({ onUninstalled }: Props) {
           >
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-zinc-200">Agent Logs</h3>
-              <span className="font-mono text-xs text-zinc-500">{logs.file}</span>
+              <span className="font-mono text-xs text-zinc-400">{logs.file}</span>
             </div>
             <div className="max-h-96 overflow-y-auto rounded-md bg-zinc-950 p-3 font-mono text-xs text-zinc-300">
               {logs.lines.length === 0 ? (
-                <span className="text-zinc-500">No log entries.</span>
+                <span className="text-zinc-400">No log entries.</span>
               ) : (
                 logs.lines.map((line, i) => (
                   <div key={i} className="leading-5">{line}</div>
@@ -174,7 +174,7 @@ export function LocalClientPanel({ onUninstalled }: Props) {
               </span>
             </div>
             {status && (
-              <p className="mt-0.5 font-mono text-xs text-zinc-500">
+              <p className="mt-0.5 font-mono text-xs text-zinc-400">
                 v{status.agent_version} · uptime {formatDuration(status.uptime_s)}
               </p>
             )}

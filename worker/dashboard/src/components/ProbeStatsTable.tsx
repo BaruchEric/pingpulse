@@ -7,13 +7,13 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function ProbeStatsTable({ stats }: { stats: AnalysisResponse["probe_stats"] }) {
-  if (stats.length === 0) return <div className="text-sm text-zinc-500">No probe data</div>;
+  if (stats.length === 0) return <div className="text-sm text-zinc-400">No probe data</div>;
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-xs text-zinc-500 border-b border-zinc-800">
+          <tr className="text-left text-xs text-zinc-400 border-b border-zinc-800">
             <th className="py-2 pr-3">Type</th>
             <th className="py-2 pr-3">Target</th>
             <th className="py-2 pr-3">Status</th>

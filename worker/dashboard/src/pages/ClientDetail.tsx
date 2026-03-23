@@ -93,12 +93,12 @@ export function ClientDetail() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
-          <Link to="/" className="text-zinc-500 hover:text-zinc-300">&larr;</Link>
+          <Link to="/" className="text-zinc-400 hover:text-zinc-300">&larr;</Link>
           <div>
             <h1 className="text-xl font-semibold">{client.name}</h1>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-zinc-400">
               {client.location}
-              {client.client_version && <span className="ml-2 text-zinc-600">v{client.client_version}</span>}
+              {client.client_version && <span className="ml-2 text-zinc-400">v{client.client_version}</span>}
             </p>
           </div>
           <StatusBadge
@@ -131,13 +131,13 @@ export function ClientDetail() {
       <div className="flex gap-1 rounded-lg bg-zinc-900/50 border border-zinc-800 p-1">
         <button
           onClick={() => { setTab("overview"); window.location.hash = ""; }}
-          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${tab === "overview" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${tab === "overview" ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-300"}`}
         >
           Overview
         </button>
         <button
           onClick={() => { setTab("analysis"); window.location.hash = "analysis"; }}
-          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${tab === "analysis" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${tab === "analysis" ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-300"}`}
         >
           Analysis
         </button>
@@ -170,7 +170,7 @@ export function ClientDetail() {
               }`}
             >
               <div className={`text-lg font-bold font-mono ${highlight ? "text-red-400" : ""}`}>{value}</div>
-              <div className={`text-xs ${highlight ? "font-semibold text-red-400/70" : "text-zinc-500"}`}>{label}</div>
+              <div className={`text-xs ${highlight ? "font-semibold text-red-400/70" : "text-zinc-400"}`}>{label}</div>
             </div>
           ))}
         </div>
@@ -180,7 +180,7 @@ export function ClientDetail() {
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
         <h2 className="mb-3 text-sm font-medium text-zinc-400">Latency & Jitter</h2>
         {metricsLoading && !metrics ? (
-          <div className="flex h-[280px] items-center justify-center text-sm text-zinc-500">Loading...</div>
+          <div className="flex h-[280px] items-center justify-center text-sm text-zinc-400">Loading...</div>
         ) : (
           <LatencyChart pings={metrics?.pings || []} />
         )}
@@ -214,7 +214,7 @@ export function ClientDetail() {
             <thead className="bg-zinc-900/80">
               <tr>
                 {["Date/Time", "Type", "Download (Mbps)", "Upload (Mbps)", "Duration (ms)"].map((h) => (
-                  <th key={h} className="px-3 py-2 text-left text-xs text-zinc-500 font-medium">{h}</th>
+                  <th key={h} className="px-3 py-2 text-left text-xs text-zinc-400 font-medium">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -232,7 +232,7 @@ export function ClientDetail() {
           </table>
           </div>
         ) : (
-          <p className="text-sm text-zinc-500">No speed tests recorded</p>
+          <p className="text-sm text-zinc-400">No speed tests recorded</p>
         )}
       </div>
 
@@ -258,13 +258,13 @@ export function ClientDetail() {
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-medium text-zinc-400">Server Logs</h2>
-          <span className="text-xs text-zinc-500">{logsTotal.toLocaleString()} total</span>
+          <span className="text-xs text-zinc-400">{logsTotal.toLocaleString()} total</span>
         </div>
         <LogsChart logs={logs} />
         {logsLoading && logs.length === 0 ? (
-          <div className="flex h-32 items-center justify-center text-sm text-zinc-500">Loading...</div>
+          <div className="flex h-32 items-center justify-center text-sm text-zinc-400">Loading...</div>
         ) : logs.length === 0 ? (
-          <div className="flex h-32 items-center justify-center text-sm text-zinc-500">No logs</div>
+          <div className="flex h-32 items-center justify-center text-sm text-zinc-400">No logs</div>
         ) : (
           <>
             <div className="overflow-x-auto">
@@ -272,7 +272,7 @@ export function ClientDetail() {
                 <thead className="bg-zinc-900/80">
                   <tr>
                     {["Timestamp", "Direction", "Status", "RTT (ms)", "Jitter (ms)"].map((h) => (
-                      <th key={h} className="px-3 py-2 text-left text-xs text-zinc-500 font-medium">{h}</th>
+                      <th key={h} className="px-3 py-2 text-left text-xs text-zinc-400 font-medium">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -313,7 +313,7 @@ export function ClientDetail() {
                 >
                   Prev
                 </button>
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-zinc-400">
                   Page {logsPage + 1} of {Math.ceil(logsTotal / LOGS_PER_PAGE)}
                 </span>
                 <button
@@ -353,7 +353,7 @@ export function ClientDetail() {
           </div>
 
           {analysisLoading && !analysis ? (
-            <div className="text-sm text-zinc-500">Loading analysis...</div>
+            <div className="text-sm text-zinc-400">Loading analysis...</div>
           ) : analysis ? (
             <>
               <AnalysisSummaryCard data={analysis} onNavigate={setAnalysisPage} />
@@ -385,7 +385,7 @@ export function ClientDetail() {
               </div>
             </>
           ) : (
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 text-center text-sm text-zinc-500">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 text-center text-sm text-zinc-400">
               Failed to load analysis data
               <button onClick={refreshAnalysis} className="ml-2 text-[var(--color-accent)] hover:underline">Retry</button>
             </div>

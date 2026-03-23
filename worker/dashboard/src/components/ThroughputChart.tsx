@@ -35,7 +35,7 @@ export function ThroughputChart({ tests }: { tests: SpeedTest[] }) {
   useUPlotChart(containerRef, () => OPTS, data);
 
   if (tests.length === 0) {
-    return <div className="flex h-[200px] items-center justify-center text-sm text-zinc-500">No speed tests</div>;
+    return <div className="flex h-[200px] items-center justify-center text-sm text-zinc-400">No speed tests</div>;
   }
 
   return <div ref={containerRef} />;

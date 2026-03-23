@@ -68,10 +68,10 @@ export function ControlPanel() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link to={`/client/${id}`} className="text-zinc-500 hover:text-zinc-300">&larr;</Link>
+          <Link to={`/client/${id}`} className="text-zinc-400 hover:text-zinc-300">&larr;</Link>
           <div>
             <h1 className="text-xl font-semibold">{client.name} — Control Panel</h1>
-            <p className="text-sm text-zinc-500">{client.location}</p>
+            <p className="text-sm text-zinc-400">{client.location}</p>
           </div>
           <StatusBadge
             lastSeen={client.last_seen}
@@ -91,7 +91,7 @@ export function ControlPanel() {
           ].map(([label, value, color]) => (
             <div key={label} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-center">
               <div className={`text-lg font-bold font-mono ${color}`}>{value}</div>
-              <div className="text-xs text-zinc-500">{label}</div>
+              <div className="text-xs text-zinc-400">{label}</div>
             </div>
           ))}
         </div>
@@ -124,7 +124,7 @@ export function ControlPanel() {
               {busy === "disconnect" ? "Disconnecting..." : "Force Disconnect"}
             </button>
           </div>
-          <p className="text-xs text-zinc-600">
+          <p className="text-xs text-zinc-400">
             Pause stops server-side pings. Disconnect closes the WebSocket (client will auto-reconnect).
           </p>
         </div>
@@ -148,7 +148,7 @@ export function ControlPanel() {
               Full Test (10MB)
             </button>
           </div>
-          <p className="text-xs text-zinc-600">
+          <p className="text-xs text-zinc-400">
             Probe is a quick bandwidth check. Full test provides accurate throughput measurement.
           </p>
         </div>
@@ -163,7 +163,7 @@ export function ControlPanel() {
           )}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-zinc-500">Added Latency (ms)</label>
+              <label className="block text-xs text-zinc-400">Added Latency (ms)</label>
               <input
                 type="number"
                 min="0"
@@ -173,7 +173,7 @@ export function ControlPanel() {
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-500">Packet Loss (%)</label>
+              <label className="block text-xs text-zinc-400">Packet Loss (%)</label>
               <input
                 type="number"
                 min="0"
@@ -203,7 +203,7 @@ export function ControlPanel() {
               Reset
             </button>
           </div>
-          <p className="text-xs text-zinc-600">
+          <p className="text-xs text-zinc-400">
             Inject artificial latency and packet loss to test alerting. Server-side only — doesn't affect actual network.
           </p>
         </div>
@@ -228,7 +228,7 @@ export function ControlPanel() {
             }}
             busy={busy !== null}
           />
-          <p className="text-xs text-zinc-600">
+          <p className="text-xs text-zinc-400">
             Updates are pushed to the client immediately via WebSocket. No restart needed.
           </p>
         </div>
@@ -262,23 +262,23 @@ function ConfigEditor({
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-zinc-500">Ping Interval (s)</label>
+          <label className="block text-xs text-zinc-400">Ping Interval (s)</label>
           <input type="number" min="5" value={interval} onChange={(e) => setInterval_(e.target.value)} className={INPUT_CLASS} />
         </div>
         <div>
-          <label className="block text-xs text-zinc-500">Speed Test Interval (s)</label>
+          <label className="block text-xs text-zinc-400">Speed Test Interval (s)</label>
           <input type="number" min="60" value={speedInterval} onChange={(e) => setSpeedInterval(e.target.value)} className={INPUT_CLASS} />
         </div>
         <div>
-          <label className="block text-xs text-zinc-500">Grace Period (s)</label>
+          <label className="block text-xs text-zinc-400">Grace Period (s)</label>
           <input type="number" min="30" value={grace} onChange={(e) => setGrace(e.target.value)} className={INPUT_CLASS} />
         </div>
         <div>
-          <label className="block text-xs text-zinc-500">Latency Threshold (ms)</label>
+          <label className="block text-xs text-zinc-400">Latency Threshold (ms)</label>
           <input type="number" min="1" value={latency} onChange={(e) => setLatency(e.target.value)} className={INPUT_CLASS} />
         </div>
         <div>
-          <label className="block text-xs text-zinc-500">Loss Threshold (%)</label>
+          <label className="block text-xs text-zinc-400">Loss Threshold (%)</label>
           <input type="number" min="0" max="100" value={loss} onChange={(e) => setLoss(e.target.value)} className={INPUT_CLASS} />
         </div>
       </div>
@@ -310,7 +310,7 @@ function RegisterInline() {
       >
         Generate Registration Token
       </button>
-      <span className="text-xs text-zinc-500">Creates a one-time token for a new client (expires in 15 min)</span>
+      <span className="text-xs text-zinc-400">Creates a one-time token for a new client (expires in 15 min)</span>
     </div>
   );
 }
