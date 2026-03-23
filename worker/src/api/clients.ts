@@ -145,13 +145,18 @@ clientRoutes.put("/:id", async (c) => {
   if (mergedConfig) {
     const doId = c.env.CLIENT_MONITOR.idFromName(id);
     const stub = c.env.CLIENT_MONITOR.get(doId);
-    c.executionCtx.waitUntil(
-      stub.fetch(new Request("http://internal/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: "update_config", params: mergedConfig }),
-      })).catch((err) => console.error("[clients] DO update_config failed", { id, err }))
-    );
+    const syncPromise = stub.fetch(new Request("http://internal/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: "update_config", params: mergedConfig }),
+    })).catch((err) => console.error("[clients] DO update_config failed", { id, err }));
+
+    try {
+      c.executionCtx.waitUntil(syncPromise);
+    } catch {
+      // executionCtx unavailable (e.g. in tests) — await inline instead
+      await syncPromise;
+    }
   }
 
   return c.json({ ok: true });
