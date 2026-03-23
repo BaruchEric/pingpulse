@@ -139,19 +139,24 @@ export function Alerts() {
           {ALERT_TYPES.map(({ key, label }) => (
             <label key={key} className="flex items-center justify-between rounded-md border border-zinc-800 px-3 py-2 hover:bg-zinc-800/50">
               <span className="text-sm text-zinc-200">{label}</span>
-              <button
-                type="button"
-                onClick={() => toggleSound(key)}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                  sounds[key] === "default" ? "bg-[var(--color-accent)]" : "bg-zinc-700"
-                }`}
-              >
-                <span
-                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                    sounds[key] === "default" ? "translate-x-4" : "translate-x-0.5"
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-mono ${sounds[key] === "default" ? "text-zinc-400" : "text-zinc-500"}`}>
+                  {sounds[key] === "default" ? "sound" : "silent"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleSound(key)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    sounds[key] === "default" ? "bg-[var(--color-accent)]" : "bg-zinc-700"
                   }`}
-                />
-              </button>
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                      sounds[key] === "default" ? "translate-x-4" : "translate-x-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
             </label>
           ))}
         </div>
