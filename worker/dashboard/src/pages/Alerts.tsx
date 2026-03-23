@@ -22,6 +22,15 @@ const DEFAULT_SOUNDS: Record<AlertType, "default" | "silent"> = {
   latency_recovered: "silent",
 };
 
+const DEFAULT_ENABLED: Record<AlertType, boolean> = {
+  client_down: true,
+  client_up: true,
+  high_latency: true,
+  packet_loss: true,
+  speed_degradation: true,
+  latency_recovered: true,
+};
+
 export function Alerts() {
   const { data: alerts, loading } = useAlerts(undefined, 100);
   const { data: clientsData } = useClients(0);
@@ -33,6 +42,7 @@ export function Alerts() {
   const [reportTelegram, setReportTelegram] = useState(true);
   const [reportEmail, setReportEmail] = useState(true);
   const [sounds, setSounds] = useState<Record<AlertType, "default" | "silent">>({ ...DEFAULT_SOUNDS });
+  const [notifyEnabled, setNotifyEnabled] = useState<Record<AlertType, boolean>>({ ...DEFAULT_ENABLED });
   const [savingSounds, setSavingSounds] = useState(false);
   const notifTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -51,6 +61,8 @@ export function Alerts() {
     if (!first) return;
     const cfg = first.config.telegram_notification_sound;
     if (cfg) setSounds({ ...DEFAULT_SOUNDS, ...cfg });
+    const en = first.config.telegram_notification_enabled;
+    if (en) setNotifyEnabled({ ...DEFAULT_ENABLED, ...en });
     if (first.config.report_schedule) setReportSchedule(first.config.report_schedule);
     const channels = first.config.report_channels;
     if (channels) {
@@ -80,7 +92,7 @@ export function Alerts() {
     try {
       await Promise.all(
         clients.map((c) =>
-          api.updateClient(c.id, { config: { telegram_notification_sound: sounds } })
+          api.updateClient(c.id, { config: { telegram_notification_sound: sounds, telegram_notification_enabled: notifyEnabled } })
         )
       );
       setNotifMsg("Notification sounds saved");
@@ -154,34 +166,54 @@ export function Alerts() {
         </div>
       </div>
 
-      {/* Telegram notification sounds */}
+      {/* Telegram notifications */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-        <h2 className="mb-1 text-sm font-medium text-zinc-400">Telegram Notification Sounds</h2>
-        <p className="mb-3 text-xs text-zinc-500">Choose which alert types play a sound in Telegram. Critical alerts always send regardless of mute.</p>
+        <h2 className="mb-1 text-sm font-medium text-zinc-400">Telegram Notifications</h2>
+        <p className="mb-3 text-xs text-zinc-500">Control which alerts send and whether they play sound. Critical alerts always send regardless of mute.</p>
+        <div className="flex items-center justify-end gap-1 px-3 pb-1">
+          <span className="text-[10px] uppercase tracking-wider text-zinc-600 w-14 text-center">Sound</span>
+          <span className="text-[10px] uppercase tracking-wider text-zinc-600 w-14 text-center">Notify</span>
+        </div>
         <div className="space-y-2">
-          {ALERT_TYPES.map(({ key, label }) => (
-            <label key={key} className="flex items-center justify-between rounded-md border border-zinc-800 px-3 py-2 hover:bg-zinc-800/50">
-              <span className="text-sm text-zinc-200">{label}</span>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-mono ${sounds[key] === "default" ? "text-zinc-400" : "text-zinc-500"}`}>
-                  {sounds[key] === "default" ? "sound" : "silent"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => toggleSound(key)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                    sounds[key] === "default" ? "bg-[var(--color-accent)]" : "bg-zinc-700"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                      sounds[key] === "default" ? "translate-x-4" : "translate-x-0.5"
+          {ALERT_TYPES.map(({ key, label }) => {
+            const enabled = notifyEnabled[key];
+            return (
+              <div key={key} className={`flex items-center justify-between rounded-md border border-zinc-800 px-3 py-2 ${!enabled ? "opacity-50" : ""}`}>
+                <span className="text-sm text-zinc-200">{label}</span>
+                <div className="flex items-center gap-2">
+                  {/* Sound toggle */}
+                  <button
+                    type="button"
+                    disabled={!enabled}
+                    onClick={() => toggleSound(key)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      sounds[key] === "default" && enabled ? "bg-[var(--color-accent)]" : "bg-zinc-700"
+                    } ${!enabled ? "cursor-not-allowed" : ""}`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                        sounds[key] === "default" ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                  {/* Notify toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setNotifyEnabled((prev) => ({ ...prev, [key]: !prev[key] }))}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      enabled ? "bg-[var(--color-accent)]" : "bg-zinc-700"
                     }`}
-                  />
-                </button>
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                        enabled ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
-            </label>
-          ))}
+            );
+          })}
         </div>
         <div className="mt-3 flex items-center gap-3">
           <button
@@ -189,7 +221,7 @@ export function Alerts() {
             disabled={savingSounds}
             className="rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
-            {savingSounds ? "Saving..." : "Save Sound Settings"}
+            {savingSounds ? "Saving..." : "Save Notification Settings"}
           </button>
           {notifMsg && <span className="text-xs text-zinc-400">{notifMsg}</span>}
         </div>

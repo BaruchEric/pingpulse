@@ -35,6 +35,8 @@ export interface ClientConfig {
 
   // Per-alert-type Telegram notification sound
   telegram_notification_sound?: Record<AlertType, "default" | "silent">;
+  // Per-alert-type Telegram notification enabled/disabled
+  telegram_notification_enabled?: Record<AlertType, boolean>;
 }
 
 export interface ClientStats {

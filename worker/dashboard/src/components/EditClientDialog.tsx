@@ -21,6 +21,15 @@ const DEFAULT_SOUNDS: Record<AlertType, "default" | "silent"> = {
   latency_recovered: "silent",
 };
 
+const DEFAULT_ENABLED: Record<AlertType, boolean> = {
+  client_down: true,
+  client_up: true,
+  high_latency: true,
+  packet_loss: true,
+  speed_degradation: true,
+  latency_recovered: true,
+};
+
 const inputCls =
   "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 focus:border-[var(--color-accent)] focus:outline-none";
 const inputMonoCls = `${inputCls} font-mono`;
@@ -94,6 +103,9 @@ export function EditClientDialog({
   const [sounds, setSounds] = useState<Record<AlertType, "default" | "silent">>(
     { ...DEFAULT_SOUNDS, ...cfg.telegram_notification_sound }
   );
+  const [notifyEnabled, setNotifyEnabled] = useState<Record<AlertType, boolean>>(
+    { ...DEFAULT_ENABLED, ...cfg.telegram_notification_enabled }
+  );
 
   const [saving, setSaving] = useState(false);
 
@@ -134,6 +146,7 @@ export function EditClientDialog({
           retention_raw_days: parseInt(retentionDays),
           retention_archive_to_r2: archiveToR2,
           telegram_notification_sound: sounds,
+          telegram_notification_enabled: notifyEnabled,
         } as Partial<Client["config"]>,
       });
       onClose();
@@ -271,13 +284,18 @@ export function EditClientDialog({
           </fieldset>
 
           <fieldset className="space-y-2 rounded-lg border border-zinc-800 p-4">
-            <legend className="px-2 text-xs font-medium text-zinc-400">Telegram Notification Sounds</legend>
-            <p className="text-xs text-zinc-500">Toggle sound on/off per alert type. Critical alerts always send regardless of mute.</p>
+            <legend className="px-2 text-xs font-medium text-zinc-400">Telegram Notifications</legend>
+            <p className="text-xs text-zinc-500">Control which alerts send and whether they play sound. Critical alerts always send regardless of mute.</p>
+            <div className="flex items-center justify-end gap-1 px-3 pb-1">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-600 w-14 text-center">Sound</span>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-600 w-14 text-center">Notify</span>
+            </div>
             {ALERT_SOUND_OPTIONS.map(({ key, label, thresholdField, unit }) => {
               const thresholdValues = { latencyThreshold, lossThreshold };
               const thresholdSetters = { latencyThreshold: setLatencyThreshold, lossThreshold: setLossThreshold };
+              const enabled = notifyEnabled[key];
               return (
-                <div key={key} className="flex items-center justify-between rounded-md border border-zinc-800 px-3 py-1.5">
+                <div key={key} className={`flex items-center justify-between rounded-md border border-zinc-800 px-3 py-1.5 ${!enabled ? "opacity-50" : ""}`}>
                   <span className="text-sm text-zinc-300">{label}</span>
                   <div className="flex items-center gap-2">
                     {thresholdField && (
@@ -291,19 +309,32 @@ export function EditClientDialog({
                         <span className="text-xs text-zinc-500">{unit}</span>
                       </div>
                     )}
-                    <span className={`text-xs font-mono ${sounds[key] === "default" ? "text-zinc-400" : "text-zinc-500"}`}>
-                      {sounds[key] === "default" ? "sound" : "silent"}
-                    </span>
+                    {/* Sound toggle */}
                     <button
                       type="button"
+                      disabled={!enabled}
                       onClick={() => setSounds((prev) => ({ ...prev, [key]: prev[key] === "default" ? "silent" : "default" }))}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        sounds[key] === "default" ? "bg-[var(--color-accent)]" : "bg-zinc-700"
-                      }`}
+                        sounds[key] === "default" && enabled ? "bg-[var(--color-accent)]" : "bg-zinc-700"
+                      } ${!enabled ? "cursor-not-allowed" : ""}`}
                     >
                       <span
                         className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
                           sounds[key] === "default" ? "translate-x-4" : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                    {/* Notify toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setNotifyEnabled((prev) => ({ ...prev, [key]: !prev[key] }))}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                        enabled ? "bg-[var(--color-accent)]" : "bg-zinc-700"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                          enabled ? "translate-x-4" : "translate-x-0.5"
                         }`}
                       />
                     </button>

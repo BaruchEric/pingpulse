@@ -56,6 +56,8 @@ export interface ClientConfig {
 
   // Per-alert-type Telegram notification sound
   telegram_notification_sound: Record<AlertType, "default" | "silent">;
+  // Per-alert-type Telegram notification enabled/disabled
+  telegram_notification_enabled: Record<AlertType, boolean>;
 }
 
 export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
@@ -85,6 +87,14 @@ export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
     packet_loss: "default",
     speed_degradation: "silent",
     latency_recovered: "silent",
+  },
+  telegram_notification_enabled: {
+    client_down: true,
+    client_up: true,
+    high_latency: true,
+    packet_loss: true,
+    speed_degradation: true,
+    latency_recovered: true,
   },
 };
 
