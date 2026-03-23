@@ -213,7 +213,7 @@ export function ClientDetail() {
           <table className="w-full min-w-[600px]">
             <thead className="bg-zinc-900/80">
               <tr>
-                {["Date/Time", "Type", "Download (Mbps)", "Upload (Mbps)", "Duration (ms)"].map((h) => (
+                {["Date/Time", "Type", "Target", "Download (Mbps)", "Upload (Mbps)", "Duration (ms)"].map((h) => (
                   <th key={h} className="px-3 py-2 text-left text-xs text-zinc-400 font-medium">{h}</th>
                 ))}
               </tr>
@@ -223,6 +223,9 @@ export function ClientDetail() {
                 <tr key={i} className="hover:bg-zinc-800/30">
                   <td className="px-3 py-2 text-sm text-zinc-300 font-mono">{new Date(st.timestamp).toLocaleString()}</td>
                   <td className="px-3 py-2 text-sm text-zinc-400">{st.type}</td>
+                  <td className="px-3 py-2 text-sm">
+                    <span className={st.target === "edge" ? "text-amber-400" : "text-blue-400"}>{st.target ?? "worker"}</span>
+                  </td>
                   <td className="px-3 py-2 text-sm text-zinc-300 font-mono">{st.download_mbps.toFixed(1)}</td>
                   <td className="px-3 py-2 text-sm text-zinc-300 font-mono">{st.upload_mbps.toFixed(1)}</td>
                   <td className="px-3 py-2 text-sm text-zinc-300 font-mono">{st.duration_ms}</td>

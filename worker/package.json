@@ -16,7 +16,7 @@
     "dev": "wrangler dev",
     "dev:dashboard": "cd dashboard && bun run dev",
     "build": "cd dashboard && bun run build && cd .. && wrangler deploy --dry-run",
-    "deploy": "cd dashboard && bun run build && cd .. && wrangler deploy",
+    "deploy": "cd dashboard && bun run build && cd .. && wrangler d1 migrations apply pingpulse-db --remote && wrangler deploy",
     "test": "vitest run",
     "lint": "eslint src/ && cd dashboard && eslint src/",
     "typecheck": "tsc --noEmit && cd dashboard && tsc --noEmit"

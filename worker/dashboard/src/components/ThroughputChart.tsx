@@ -14,8 +14,10 @@ const OPTS: Omit<uPlot.Options, "width"> = {
   ],
   series: [
     {},
-    { label: "Download", stroke: "#10b981", width: 2, fill: "#10b98120" },
-    { label: "Upload", stroke: "#8b5cf6", width: 2, fill: "#8b5cf620" },
+    { label: "Worker DL", stroke: "#3b82f6", width: 2, fill: "#3b82f620" },
+    { label: "Worker UL", stroke: "#93c5fd", width: 2, fill: "#93c5fd20" },
+    { label: "Edge DL", stroke: "#f59e0b", width: 2, fill: "#f59e0b20" },
+    { label: "Edge UL", stroke: "#fcd34d", width: 2, fill: "#fcd34d20" },
   ],
 };
 
@@ -23,13 +25,23 @@ export function ThroughputChart({ tests }: { tests: SpeedTest[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const data = useMemo(() => {
-    const sorted = [...tests].reverse();
-    if (sorted.length === 0) return null;
-    return [
-      sorted.map((t) => new Date(t.timestamp).getTime() / 1000),
-      sorted.map((t) => t.download_mbps),
-      sorted.map((t) => t.upload_mbps),
-    ] as uPlot.AlignedData;
+    if (tests.length === 0) return null;
+    const ts: number[] = [];
+    const wDl: (number | null)[] = [];
+    const wUl: (number | null)[] = [];
+    const eDl: (number | null)[] = [];
+    const eUl: (number | null)[] = [];
+    for (let i = tests.length - 1; i >= 0; i--) {
+      const t = tests[i];
+      if (!t) continue;
+      ts.push(new Date(t.timestamp).getTime() / 1000);
+      const isEdge = t.target === "edge";
+      wDl.push(isEdge ? null : t.download_mbps);
+      wUl.push(isEdge ? null : t.upload_mbps);
+      eDl.push(isEdge ? t.download_mbps : null);
+      eUl.push(isEdge ? t.upload_mbps : null);
+    }
+    return [ts, wDl, wUl, eDl, eUl] as uPlot.AlignedData;
   }, [tests]);
 
   useUPlotChart(containerRef, () => OPTS, data);
