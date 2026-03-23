@@ -68,7 +68,7 @@ export function ReportModal({ clientId, onClose }: ReportModalProps) {
           </button>
 
           <button
-            onClick={() => window.print()}
+            onClick={() => { onClose(); requestAnimationFrame(() => window.print()); }}
             className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-zinc-200 hover:bg-zinc-700"
           >
             Print Report

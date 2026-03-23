@@ -396,10 +396,15 @@ export function ClientDetail() {
 
       <style>{`
         @media print {
-          nav, .print\\:hidden { display: none !important; }
-          body { background: white !important; color: black !important; }
+          nav, .print\\:hidden, .fixed { display: none !important; }
+          body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; }
           #analysis-content { color: #111 !important; }
-          #analysis-content * { border-color: #ddd !important; }
+          #analysis-content * { border-color: #ddd !important; color: #222 !important; }
+          #analysis-content h3 { color: #000 !important; font-weight: 600 !important; }
+          #analysis-content .bg-amber-950\\/20, #analysis-content .bg-zinc-900\\/50 {
+            background: #f5f5f5 !important;
+          }
+          #analysis-content table { font-size: 11px !important; }
         }
       `}</style>
     </div>
