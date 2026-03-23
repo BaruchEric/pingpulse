@@ -32,6 +32,9 @@ export interface ClientConfig {
   // Health report config
   report_schedule?: "daily" | "6h" | "weekly" | "off";
   report_channels?: ("telegram" | "email")[];
+
+  // Per-alert-type Telegram notification sound
+  telegram_notification_sound?: Record<AlertType, "default" | "silent">;
 }
 
 export interface ClientStats {

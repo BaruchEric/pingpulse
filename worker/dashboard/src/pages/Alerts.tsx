@@ -1,20 +1,49 @@
-import { useState } from "react";
-import { useAlerts } from "@/lib/hooks";
+import { useState, useEffect } from "react";
+import { useAlerts, useClients } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { AlertRow } from "@/components/AlertRow";
+import type { AlertType } from "@/lib/types";
+
+const ALERT_TYPES: { key: AlertType; label: string }[] = [
+  { key: "client_down", label: "Client Down" },
+  { key: "client_up", label: "Client Up" },
+  { key: "high_latency", label: "High Latency" },
+  { key: "packet_loss", label: "Packet Loss" },
+  { key: "speed_degradation", label: "Speed Degradation" },
+  { key: "latency_recovered", label: "Latency Recovered" },
+];
+
+const DEFAULT_SOUNDS: Record<AlertType, "default" | "silent"> = {
+  client_down: "default",
+  client_up: "silent",
+  high_latency: "default",
+  packet_loss: "default",
+  speed_degradation: "silent",
+  latency_recovered: "silent",
+};
 
 export function Alerts() {
   const { data: alerts, loading } = useAlerts(undefined, 100);
+  const { data: clientsData } = useClients(0);
   const [latencyThreshold, setLatencyThreshold] = useState("");
   const [lossThreshold, setLossThreshold] = useState("");
   const [saving, setSaving] = useState(false);
-  const [alertEmail, setAlertEmail] = useState("");
-  const [telegramBotToken, setTelegramBotToken] = useState("");
-  const [telegramChatId, setTelegramChatId] = useState("");
   const [notifMsg, setNotifMsg] = useState("");
   const [reportSchedule, setReportSchedule] = useState<string>("daily");
   const [reportTelegram, setReportTelegram] = useState(true);
   const [reportEmail, setReportEmail] = useState(true);
+  const [sounds, setSounds] = useState<Record<AlertType, "default" | "silent">>({ ...DEFAULT_SOUNDS });
+  const [savingSounds, setSavingSounds] = useState(false);
+
+  // Load sound config from first client
+  useEffect(() => {
+    const clients = clientsData?.clients;
+    if (!clients?.length) return;
+    const first = clients[0];
+    if (!first) return;
+    const cfg = first.config.telegram_notification_sound;
+    if (cfg) setSounds({ ...DEFAULT_SOUNDS, ...cfg });
+  }, [clientsData]);
 
   const handleSaveThresholds = async () => {
     setSaving(true);
@@ -30,9 +59,28 @@ export function Alerts() {
     }
   };
 
-  const handleSaveNotifications = () => {
-    setNotifMsg("Saved");
-    setTimeout(() => setNotifMsg(""), 2000);
+  const handleSaveSounds = async () => {
+    const clients = clientsData?.clients;
+    if (!clients?.length) return;
+    setSavingSounds(true);
+    try {
+      await Promise.all(
+        clients.map((c) =>
+          api.updateClient(c.id, { config: { telegram_notification_sound: sounds } })
+        )
+      );
+      setNotifMsg("Notification sounds saved");
+      setTimeout(() => setNotifMsg(""), 2000);
+    } finally {
+      setSavingSounds(false);
+    }
+  };
+
+  const toggleSound = (key: AlertType) => {
+    setSounds((prev) => ({
+      ...prev,
+      [key]: prev[key] === "default" ? "silent" : "default",
+    }));
   };
 
   const handleTestAlert = async () => {
@@ -83,49 +131,39 @@ export function Alerts() {
         </div>
       </div>
 
-      {/* Notification config */}
+      {/* Telegram notification sounds */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-        <h2 className="mb-3 text-sm font-medium text-zinc-400">Notification Settings</h2>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs text-zinc-500">Email</label>
-            <input
-              type="text"
-              value={alertEmail}
-              onChange={(e) => setAlertEmail(e.target.value)}
-              placeholder="admin@example.com"
-              className="mt-1 w-full max-w-xs rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[var(--color-accent)] focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-zinc-500">Telegram Bot Token</label>
-            <input
-              type="text"
-              value={telegramBotToken}
-              onChange={(e) => setTelegramBotToken(e.target.value)}
-              placeholder="bot token"
-              className="mt-1 w-full max-w-xs rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[var(--color-accent)] focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-zinc-500">Telegram Chat ID</label>
-            <input
-              type="text"
-              value={telegramChatId}
-              onChange={(e) => setTelegramChatId(e.target.value)}
-              placeholder="chat ID"
-              className="mt-1 w-full max-w-xs rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[var(--color-accent)] focus:outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSaveNotifications}
-              className="rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)]"
-            >
-              Save Notification Settings
-            </button>
-            {notifMsg && <span className="text-xs text-zinc-400">{notifMsg}</span>}
-          </div>
+        <h2 className="mb-1 text-sm font-medium text-zinc-400">Telegram Notification Sounds</h2>
+        <p className="mb-3 text-xs text-zinc-500">Choose which alert types play a sound in Telegram. Critical alerts always send regardless of mute.</p>
+        <div className="space-y-2">
+          {ALERT_TYPES.map(({ key, label }) => (
+            <label key={key} className="flex items-center justify-between rounded-md border border-zinc-800 px-3 py-2 hover:bg-zinc-800/50">
+              <span className="text-sm text-zinc-200">{label}</span>
+              <button
+                type="button"
+                onClick={() => toggleSound(key)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                  sounds[key] === "default" ? "bg-[var(--color-accent)]" : "bg-zinc-700"
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                    sounds[key] === "default" ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </label>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            onClick={handleSaveSounds}
+            disabled={savingSounds}
+            className="rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+          >
+            {savingSounds ? "Saving..." : "Save Sound Settings"}
+          </button>
+          {notifMsg && <span className="text-xs text-zinc-400">{notifMsg}</span>}
         </div>
       </div>
 
