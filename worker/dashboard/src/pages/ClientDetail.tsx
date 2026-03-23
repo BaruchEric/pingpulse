@@ -19,7 +19,7 @@ import { DirectionAsymmetry } from "@/components/DirectionAsymmetry";
 import { AlertStormSummary } from "@/components/AlertStormSummary";
 import { SpeedTestStats } from "@/components/SpeedTestStats";
 import { ReportModal } from "@/components/ReportModal";
-import { FullAnalysisReport } from "@/components/FullAnalysisReport";
+import { FullAnalysisReport, type PageId } from "@/components/FullAnalysisReport";
 
 export function ClientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -36,6 +36,7 @@ export function ClientDetail() {
     window.location.hash === "#analysis" ? "analysis" : "overview"
   );
   const { data: analysis, loading: analysisLoading, refresh: refreshAnalysis } = useAnalysis(clientId, range, tab === "analysis");
+  const [analysisPage, setAnalysisPage] = useState<PageId>("overview");
   const [showReportModal, setShowReportModal] = useState(false);
 
   // Ping logs
@@ -355,8 +356,8 @@ export function ClientDetail() {
             <div className="text-sm text-zinc-500">Loading analysis...</div>
           ) : analysis ? (
             <>
-              <AnalysisSummaryCard data={analysis} />
-              <FullAnalysisReport data={analysis} client={client} />
+              <AnalysisSummaryCard data={analysis} onNavigate={setAnalysisPage} />
+              <FullAnalysisReport data={analysis} client={client} page={analysisPage} onPageChange={setAnalysisPage} />
 
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
                 <h3 className="mb-3 text-sm font-medium text-zinc-400">Direction Asymmetry</h3>

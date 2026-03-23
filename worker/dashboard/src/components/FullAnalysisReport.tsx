@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo } from "react";
 import type { AnalysisResponse, Client } from "@/lib/types";
 
 function fmt(ms: number | null | undefined): string {
@@ -121,7 +121,7 @@ function LatencyDistTable({
   );
 }
 
-type PageId = "overview" | "latency" | "reliability" | "speed";
+export type PageId = "overview" | "latency" | "reliability" | "speed";
 
 const PAGES: { id: PageId; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -133,11 +133,14 @@ const PAGES: { id: PageId; label: string }[] = [
 export const FullAnalysisReport = memo(function FullAnalysisReport({
   data,
   client,
+  page,
+  onPageChange,
 }: {
   data: AnalysisResponse;
   client: Client;
+  page: PageId;
+  onPageChange: (page: PageId) => void;
 }) {
-  const [page, setPage] = useState<PageId>("overview");
 
   const { cfTo, toCf, totalOkPings, lossPct, asymmetryRatio, totalAlerts } = useMemo(() => {
     const cfTo = data.ping_stats.find((p) => p.direction === "cf_to_client" && p.status === "ok");
@@ -234,7 +237,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
         {PAGES.map((p) => (
           <button
             key={p.id}
-            onClick={() => setPage(p.id)}
+            onClick={() => onPageChange(p.id)}
             className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               page === p.id
                 ? "bg-zinc-700 text-zinc-100"
@@ -602,7 +605,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
 
       <div className="flex items-center justify-between pt-2">
         <button
-          onClick={() => { const prev = PAGES[pageIdx - 1]; if (prev) setPage(prev.id); }}
+          onClick={() => { const prev = PAGES[pageIdx - 1]; if (prev) onPageChange(prev.id); }}
           disabled={pageIdx === 0}
           className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
         >
@@ -612,7 +615,7 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
           {pageIdx + 1} / {PAGES.length}
         </span>
         <button
-          onClick={() => { const next = PAGES[pageIdx + 1]; if (next) setPage(next.id); }}
+          onClick={() => { const next = PAGES[pageIdx + 1]; if (next) onPageChange(next.id); }}
           disabled={pageIdx === PAGES.length - 1}
           className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
         >
