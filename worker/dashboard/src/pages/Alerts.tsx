@@ -12,6 +12,9 @@ export function Alerts() {
   const [telegramBotToken, setTelegramBotToken] = useState("");
   const [telegramChatId, setTelegramChatId] = useState("");
   const [notifMsg, setNotifMsg] = useState("");
+  const [reportSchedule, setReportSchedule] = useState<string>("daily");
+  const [reportTelegram, setReportTelegram] = useState(true);
+  const [reportEmail, setReportEmail] = useState(true);
 
   const handleSaveThresholds = async () => {
     setSaving(true);
@@ -123,6 +126,44 @@ export function Alerts() {
             </button>
             {notifMsg && <span className="text-xs text-zinc-400">{notifMsg}</span>}
           </div>
+        </div>
+      </div>
+
+      {/* Health Reports */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+        <h2 className="mb-3 text-sm font-medium text-zinc-400">Health Reports</h2>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-zinc-500">Schedule</label>
+            <select
+              value={reportSchedule}
+              onChange={(e) => setReportSchedule(e.target.value)}
+              className="mt-1 w-full max-w-xs rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 focus:border-[var(--color-accent)] focus:outline-none"
+            >
+              <option value="daily">Daily</option>
+              <option value="6h">Every 6 hours</option>
+              <option value="weekly">Weekly</option>
+              <option value="off">Off</option>
+            </select>
+          </div>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm text-zinc-300">
+              <input type="checkbox" checked={reportTelegram} onChange={(e) => setReportTelegram(e.target.checked)} className="rounded border-zinc-600" />
+              Telegram
+            </label>
+            <label className="flex items-center gap-2 text-sm text-zinc-300">
+              <input type="checkbox" checked={reportEmail} onChange={(e) => setReportEmail(e.target.checked)} className="rounded border-zinc-600" />
+              Email
+            </label>
+          </div>
+          <button
+            onClick={() => {
+              setNotifMsg("Report settings saved");
+            }}
+            className="rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)]"
+          >
+            Save Report Settings
+          </button>
         </div>
       </div>
 
