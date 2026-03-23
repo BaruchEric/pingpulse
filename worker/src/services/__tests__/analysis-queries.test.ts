@@ -4,7 +4,7 @@ import { buildAnalysisQueries } from "@/services/analysis-queries";
 describe("buildAnalysisQueries", () => {
   it("returns 8 query objects with sql and params", () => {
     const queries = buildAnalysisQueries("client-1", "2026-03-21T00:00:00Z", "2026-03-22T00:00:00Z");
-    expect(queries).toHaveLength(8);
+    expect(queries).toHaveLength(11);
     for (const q of queries) {
       expect(q).toHaveProperty("key");
       expect(q).toHaveProperty("sql");
@@ -33,6 +33,9 @@ describe("buildAnalysisQueries", () => {
       "speed_test_stats",
       "alert_summary",
       "recent_errors",
+      "latency_distribution",
+      "outage_events",
+      "full_speed_tests",
     ]);
   });
 });

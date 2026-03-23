@@ -178,6 +178,22 @@ export interface AnalysisResponse {
     target: string;
     status: string;
   }[];
+  latency_distribution: {
+    direction: string;
+    bucket: string;
+    count: number;
+  }[];
+  outage_events: {
+    start_ts: string;
+    end_ts: string | null;
+    duration_s: number | null;
+  }[];
+  full_speed_tests: {
+    timestamp: string;
+    download_mbps: number;
+    upload_mbps: number;
+    duration_ms: number;
+  }[];
 }
 
 export interface ClientRecord {

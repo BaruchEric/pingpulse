@@ -19,6 +19,7 @@ import { DirectionAsymmetry } from "@/components/DirectionAsymmetry";
 import { AlertStormSummary } from "@/components/AlertStormSummary";
 import { SpeedTestStats } from "@/components/SpeedTestStats";
 import { ReportModal } from "@/components/ReportModal";
+import { FullAnalysisReport } from "@/components/FullAnalysisReport";
 
 export function ClientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -355,6 +356,7 @@ export function ClientDetail() {
           ) : analysis ? (
             <>
               <AnalysisSummaryCard data={analysis} />
+              <FullAnalysisReport data={analysis} client={client} />
 
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
                 <h3 className="mb-3 text-sm font-medium text-zinc-400">Direction Asymmetry</h3>

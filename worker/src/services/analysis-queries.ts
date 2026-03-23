@@ -63,6 +63,48 @@ export function buildAnalysisQueries(
             WHERE client_id = ? AND status != 'ok' AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC LIMIT 50`,
       params: [clientId, from, to],
     },
+    {
+      key: "latency_distribution",
+      sql: `SELECT direction,
+            CASE
+              WHEN rtt_ms < 20 THEN '<20ms'
+              WHEN rtt_ms < 50 THEN '20-50ms'
+              WHEN rtt_ms < 100 THEN '50-100ms'
+              WHEN rtt_ms < 150 THEN '100-150ms'
+              WHEN rtt_ms < 200 THEN '150-200ms'
+              WHEN rtt_ms < 300 THEN '200-300ms'
+              ELSE '>300ms'
+            END as bucket,
+            COUNT(*) as count
+            FROM ping_results
+            WHERE client_id = ? AND timestamp BETWEEN ? AND ? AND status = 'ok'
+            GROUP BY direction, bucket
+            ORDER BY direction,
+              CASE
+                WHEN rtt_ms < 20 THEN 1
+                WHEN rtt_ms < 50 THEN 2
+                WHEN rtt_ms < 100 THEN 3
+                WHEN rtt_ms < 150 THEN 4
+                WHEN rtt_ms < 200 THEN 5
+                WHEN rtt_ms < 300 THEN 6
+                ELSE 7
+              END`,
+      params: [clientId, from, to],
+    },
+    {
+      key: "outage_events",
+      sql: `SELECT start_ts, end_ts, duration_s FROM outages
+            WHERE client_id = ? AND start_ts BETWEEN ? AND ?
+            ORDER BY start_ts`,
+      params: [clientId, from, to],
+    },
+    {
+      key: "full_speed_tests",
+      sql: `SELECT timestamp, download_mbps, upload_mbps, duration_ms FROM speed_tests
+            WHERE client_id = ? AND type = 'full' AND timestamp BETWEEN ? AND ?
+            ORDER BY timestamp`,
+      params: [clientId, from, to],
+    },
   ];
 }
 

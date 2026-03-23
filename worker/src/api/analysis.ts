@@ -42,6 +42,9 @@ analysisRoutes.get("/:id/analysis", async (c) => {
     speed_test_stats: raw.speed_test_stats as AnalysisResponse["speed_test_stats"],
     alert_summary: raw.alert_summary as AnalysisResponse["alert_summary"],
     recent_errors: raw.recent_errors as AnalysisResponse["recent_errors"],
+    latency_distribution: raw.latency_distribution as AnalysisResponse["latency_distribution"],
+    outage_events: raw.outage_events as AnalysisResponse["outage_events"],
+    full_speed_tests: raw.full_speed_tests as AnalysisResponse["full_speed_tests"],
   };
 
   return c.json(response);
