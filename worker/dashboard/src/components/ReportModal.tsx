@@ -34,7 +34,7 @@ export function ReportModal({ clientId, onClose }: ReportModalProps) {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      // silently fail
+      setResult({ error: true });
     }
   };
 

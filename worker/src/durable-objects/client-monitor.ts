@@ -13,6 +13,18 @@ import { DEFAULT_CLIENT_CONFIG } from "@/types";
 import { hashString } from "@/utils/hash";
 import { dispatchAlert } from "@/services/alert-dispatch";
 
+function semverLt(a: string, b: string): boolean {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] ?? 0;
+    const nb = pb[i] ?? 0;
+    if (na < nb) return true;
+    if (na > nb) return false;
+  }
+  return false;
+}
+
 interface PingInFlight {
   id: string;
   sent_ts: number;
@@ -158,7 +170,7 @@ export class ClientMonitor implements DurableObject {
 
     // Notify client if a newer version is available
     const latestVersion = this.env.LATEST_CLIENT_VERSION || "";
-    if (clientVersion && latestVersion && clientVersion !== latestVersion && clientVersion < latestVersion) {
+    if (clientVersion && latestVersion && clientVersion !== latestVersion && semverLt(clientVersion, latestVersion)) {
       server.send(
         JSON.stringify({
           type: "update_available",

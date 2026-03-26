@@ -17,27 +17,19 @@ export function rateLimit(config: RateLimitConfig) {
       now.getTime() - config.windowMs
     ).toISOString();
 
-    const row = await c.env.DB.prepare(
-      "SELECT count, window_start FROM rate_limits WHERE key = ?"
+    // Single upsert: reset if window expired, otherwise increment
+    const result = await c.env.DB.prepare(
+      `INSERT INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)
+       ON CONFLICT(key) DO UPDATE SET
+         count = CASE WHEN window_start <= ? THEN 1 ELSE count + 1 END,
+         window_start = CASE WHEN window_start <= ? THEN ? ELSE window_start END
+       RETURNING count`
     )
-      .bind(key)
-      .first<{ count: number; window_start: string }>();
+      .bind(key, now.toISOString(), windowStart, windowStart, now.toISOString())
+      .first<{ count: number }>();
 
-    if (row && row.window_start > windowStart) {
-      if (row.count >= config.maxRequests) {
-        return c.json({ error: "Rate limit exceeded" }, 429);
-      }
-      await c.env.DB.prepare(
-        "UPDATE rate_limits SET count = count + 1 WHERE key = ?"
-      )
-        .bind(key)
-        .run();
-    } else {
-      await c.env.DB.prepare(
-        "INSERT OR REPLACE INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)"
-      )
-        .bind(key, now.toISOString())
-        .run();
+    if (result && result.count >= config.maxRequests) {
+      return c.json({ error: "Rate limit exceeded" }, 429);
     }
 
     await next();

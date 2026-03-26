@@ -158,8 +158,9 @@ export function EditClientDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <form
+        onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
         className="relative max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
       >
@@ -291,8 +292,6 @@ export function EditClientDialog({
               <span className="text-[10px] uppercase tracking-wider text-zinc-400 w-14 text-center">Notify</span>
             </div>
             {ALERT_SOUND_OPTIONS.map(({ key, label, thresholdField, unit }) => {
-              const thresholdValues = { latencyThreshold, lossThreshold };
-              const thresholdSetters = { latencyThreshold: setLatencyThreshold, lossThreshold: setLossThreshold };
               const enabled = notifyEnabled[key];
               return (
                 <div key={key} className={`flex items-center justify-between rounded-md border border-zinc-800 px-3 py-1.5 ${!enabled ? "opacity-50" : ""}`}>
@@ -302,8 +301,8 @@ export function EditClientDialog({
                       <div className="flex items-center gap-1">
                         <input
                           type="number"
-                          value={thresholdValues[thresholdField]}
-                          onChange={(e) => thresholdSetters[thresholdField](e.target.value)}
+                          value={thresholdField === "latencyThreshold" ? latencyThreshold : lossThreshold}
+                          onChange={(e) => (thresholdField === "latencyThreshold" ? setLatencyThreshold : setLossThreshold)(e.target.value)}
                           className="w-16 rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs font-mono text-zinc-200 focus:border-[var(--color-accent)] focus:outline-none"
                         />
                         <span className="text-xs text-zinc-400">{unit}</span>
@@ -312,6 +311,9 @@ export function EditClientDialog({
                     {/* Sound toggle */}
                     <button
                       type="button"
+                      role="switch"
+                      aria-checked={sounds[key] === "default"}
+                      aria-label={`${label} sound`}
                       disabled={!enabled}
                       onClick={() => setSounds((prev) => ({ ...prev, [key]: prev[key] === "default" ? "silent" : "default" }))}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
@@ -327,6 +329,9 @@ export function EditClientDialog({
                     {/* Notify toggle */}
                     <button
                       type="button"
+                      role="switch"
+                      aria-checked={enabled}
+                      aria-label={`${label} notify`}
                       onClick={() => setNotifyEnabled((prev) => ({ ...prev, [key]: !prev[key] }))}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                         enabled ? "bg-[var(--color-accent)]" : "bg-zinc-700"

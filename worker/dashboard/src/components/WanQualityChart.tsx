@@ -4,6 +4,19 @@ import { useUPlotChart } from "@/components/useUPlotChart";
 import { api } from "@/lib/api";
 import { DARK_AXIS } from "@/lib/chart-defaults";
 
+function fallbackOpts(): Omit<uPlot.Options, "width"> {
+  return {
+    height: 280,
+    class: "uplot-dark",
+    scales: { x: { time: true }, y: { auto: true } },
+    axes: [
+      { ...DARK_AXIS },
+      { ...DARK_AXIS, label: "RTT (ms)" },
+    ],
+    series: [{}],
+  };
+}
+
 interface ProbeResult {
   timestamp: number;
   probe_type: "icmp" | "http";
@@ -116,16 +129,7 @@ export function WanQualityChart({
     return { data: aligned as uPlot.AlignedData, opts: chartOpts };
   }, [probes]);
 
-  useUPlotChart(containerRef, () => opts ?? {
-    height: 280,
-    class: "uplot-dark",
-    scales: { x: { time: true }, y: { auto: true } },
-    axes: [
-      { ...DARK_AXIS },
-      { ...DARK_AXIS, label: "RTT (ms)" },
-    ],
-    series: [{}],
-  }, data, filter);
+  useUPlotChart(containerRef, () => opts ?? fallbackOpts(), data, filter);
 
   const filters: { label: string; value: ProbeFilter }[] = [
     { label: "ALL", value: "all" },

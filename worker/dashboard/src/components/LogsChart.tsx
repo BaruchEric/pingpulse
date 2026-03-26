@@ -4,6 +4,8 @@ import { useUPlotChart } from "@/components/useUPlotChart";
 import { DARK_AXIS } from "@/lib/chart-defaults";
 import type { PingResult } from "@/lib/types";
 
+const FALLBACK_OPTS: Omit<uPlot.Options, "width"> = { height: 160, series: [{}], axes: [] };
+
 export function LogsChart({ logs }: { logs: PingResult[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -68,7 +70,7 @@ export function LogsChart({ logs }: { logs: PingResult[] }) {
     };
   }, [logs]);
 
-  useUPlotChart(containerRef, () => opts ?? { height: 160, series: [{}], axes: [] }, data);
+  useUPlotChart(containerRef, () => opts ?? FALLBACK_OPTS, data);
 
   if (logs.length === 0) return null;
 

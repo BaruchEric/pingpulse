@@ -1,7 +1,10 @@
+import { useEffect, useReducer } from "react";
+
 export type Status = "up" | "degraded" | "down";
 
 // Default ping interval assumed when none is provided (30s)
 const DEFAULT_PING_INTERVAL_MS = 30_000;
+const REFRESH_INTERVAL_MS = 15_000;
 
 /**
  * Derive the display grace period from the ping interval.
@@ -43,6 +46,13 @@ export function StatusBadge({
   latencyMs?: number;
   thresholdMs?: number;
 }) {
+  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
+
+  useEffect(() => {
+    const id = setInterval(forceUpdate, REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [forceUpdate]);
+
   const status = getClientStatus(lastSeen, pingIntervalMs, latencyMs, thresholdMs);
   const { dot, label, text } = STATUS_STYLES[status];
 

@@ -38,11 +38,12 @@ exportRoutes.get("/:id", async (c) => {
 
   if (format === "csv") {
     let csv = "# Ping Results\n";
+    const esc = (v: unknown) => JSON.stringify(String(v ?? ""));
     csv += "timestamp,rtt_ms,jitter_ms,direction,status\n";
     csv += pings
       .map(
         (p: Record<string, unknown>) =>
-          `${p.timestamp},${p.rtt_ms},${p.jitter_ms},${p.direction},${p.status}`
+          [p.timestamp, p.rtt_ms, p.jitter_ms, p.direction, p.status].map(esc).join(",")
       )
       .join("\n");
 
@@ -51,7 +52,7 @@ exportRoutes.get("/:id", async (c) => {
     csv += speedTests
       .map(
         (s: Record<string, unknown>) =>
-          `${s.timestamp},${s.type},${s.download_mbps},${s.upload_mbps},${s.payload_bytes},${s.duration_ms}`
+          [s.timestamp, s.type, s.download_mbps, s.upload_mbps, s.payload_bytes, s.duration_ms].map(esc).join(",")
       )
       .join("\n");
 

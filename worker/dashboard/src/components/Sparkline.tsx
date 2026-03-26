@@ -25,8 +25,12 @@ export function Sparkline({
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
-    const min = Math.min(...data);
-    const max = Math.max(...data);
+    let min = Infinity;
+    let max = -Infinity;
+    for (const v of data) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
     const range = max - min || 1;
     const pad = 2;
 

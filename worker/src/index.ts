@@ -4,22 +4,10 @@ import { archiveOldRecords } from "@/services/archiver";
 import { runAnalysis } from "@/services/analysis-queries";
 import { formatTelegramReport, formatEmailReport } from "@/services/health-report";
 import { sendTelegramMessage, sendResendEmail } from "@/services/notify";
+import type { Env } from "@/types";
 
 export { ClientMonitor };
-
-export interface Env {
-  DB: D1Database;
-  ARCHIVE: R2Bucket;
-  METRICS: AnalyticsEngineDataset;
-  CLIENT_MONITOR: DurableObjectNamespace;
-  ADMIN_JWT_SECRET: string;
-  RESEND_API_KEY: string;
-  ALERT_FROM_EMAIL: string;
-  ALERT_TO_EMAIL: string;
-  TELEGRAM_BOT_TOKEN: string;
-  TELEGRAM_CHAT_ID: string;
-  LATEST_CLIENT_VERSION: string;
-}
+export type { Env };
 
 const app = createRouter();
 
@@ -28,37 +16,16 @@ async function applyPerClientRetention(env: Env): Promise<void> {
     "SELECT id, config_json FROM clients"
   ).all<{ id: string; config_json: string }>();
 
-  for (const client of allClients.results ?? []) {
+  const stmts = (allClients.results ?? []).flatMap((client) => {
     const config = JSON.parse(client.config_json || "{}");
     const rawDays = config.retention_raw_days ?? 30;
-    const archiveToR2 = config.retention_archive_to_r2 ?? true;
     const cutoff = Date.now() - rawDays * 24 * 60 * 60 * 1000;
-
-    if (archiveToR2) {
-      const oldProbes = await env.DB.prepare(
-        "SELECT * FROM client_probe_results WHERE client_id = ? AND timestamp < ?"
-      ).bind(client.id, cutoff).all();
-
-      if ((oldProbes.results?.length ?? 0) > 0) {
-        const results = oldProbes.results ?? [];
-        const firstRow = results[0];
-        const headers = Object.keys(firstRow ?? {});
-        const csv = [headers.join(","), ...results.map(row =>
-          headers.map(h => JSON.stringify((row as Record<string, unknown>)[h] ?? "")).join(",")
-        )].join("\n");
-        const key = `archive/${client.id}/probes/${new Date().toISOString().slice(0, 10)}.csv`;
-        await env.ARCHIVE.put(key, csv);
-      }
-    }
-
-    await env.DB.prepare(
-      "DELETE FROM client_probe_results WHERE client_id = ? AND timestamp < ?"
-    ).bind(client.id, cutoff).run();
-
-    await env.DB.prepare(
-      "DELETE FROM ping_results WHERE client_id = ? AND timestamp < ?"
-    ).bind(client.id, cutoff).run();
-  }
+    return [
+      env.DB.prepare("DELETE FROM client_probe_results WHERE client_id = ? AND timestamp < ?").bind(client.id, cutoff),
+      env.DB.prepare("DELETE FROM ping_results WHERE client_id = ? AND timestamp < ?").bind(client.id, cutoff),
+    ];
+  });
+  if (stmts.length > 0) await env.DB.batch(stmts);
 }
 
 async function generateHealthReports(env: Env): Promise<void> {
@@ -68,10 +35,10 @@ async function generateHealthReports(env: Env): Promise<void> {
 
   // Query clients active in last 7 days (wider window for weekly reports)
   const { results: clients } = await env.DB.prepare(
-    "SELECT id, name, config_json FROM clients WHERE last_seen > ?"
+    "SELECT id, name, config_json, last_seen FROM clients WHERE last_seen > ?"
   )
     .bind(new Date(Date.now() - 7 * 86400_000).toISOString())
-    .all<{ id: string; name: string; config_json: string }>();
+    .all<{ id: string; name: string; config_json: string; last_seen: string }>();
 
   await Promise.allSettled(
     (clients ?? []).map(async (client) => {
@@ -85,19 +52,21 @@ async function generateHealthReports(env: Env): Promise<void> {
       // "6h" runs every cron tick — no filter needed
 
       const windowMs = schedule === "weekly" ? 7 * 86400_000 : schedule === "6h" ? 6 * 3600_000 : 86400_000;
-      const from = new Date(Date.now() - windowMs).toISOString();
+      const from = new Date(now.getTime() - windowMs).toISOString();
       const to = now.toISOString();
 
       try {
         const data = await runAnalysis(env.DB, client.id, from, to);
+        const gracePeriod = (config.down_alert_grace_seconds ?? config.grace_period_s ?? 60) * 1000;
+        const isDown = Date.now() - new Date(client.last_seen).getTime() > gracePeriod;
 
         if (channels.includes("telegram")) {
-          const message = formatTelegramReport(client.name, from, to, data);
+          const message = formatTelegramReport(client.name, from, to, data, isDown);
           await sendTelegramMessage(env, message);
         }
 
         if (channels.includes("email")) {
-          const html = formatEmailReport(client.name, from, to, data);
+          const html = formatEmailReport(client.name, from, to, data, isDown);
           await sendResendEmail(env, `[PingPulse] Health Report — ${client.name}`, { html });
         }
       } catch (err) {
@@ -145,7 +114,7 @@ export default {
 
     // Push speed test triggers and archive work into waitUntil
     ctx.waitUntil(
-      Promise.all([
+      Promise.allSettled([
         Promise.allSettled(
           activeClients.map((client) => {
             const doId = env.CLIENT_MONITOR.idFromName(client.id as string);
@@ -161,7 +130,6 @@ export default {
         )
           .bind(new Date(Date.now() - 3600_000).toISOString())
           .run(),
-        // Per-client retention policy
         applyPerClientRetention(env),
         generateHealthReports(env),
       ])

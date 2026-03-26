@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { RegisterDialog } from "@/components/RegisterDialog";
 import { useParams, Link } from "react-router";
 import { api } from "@/lib/api";
@@ -18,6 +18,7 @@ export function ControlPanel() {
   const [simLoss, setSimLoss] = useState("0");
   const [toast, setToast] = useState<string | null>(null);
   const simInitialized = useRef(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Initialize sim values from first status fetch only
   useEffect(() => {
@@ -28,10 +29,15 @@ export function ControlPanel() {
     }
   }, [status]);
 
-  const showToast = (msg: string) => {
+  useEffect(() => {
+    return () => { clearTimeout(toastTimerRef.current); };
+  }, []);
+
+  const showToast = useCallback((msg: string) => {
+    clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
+  }, []);
 
   const runCommand = async (command: string, params?: Record<string, unknown>, label?: string) => {
     setBusy(command);

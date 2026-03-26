@@ -52,9 +52,12 @@ function createSyncStore(clientId: string) {
       }
       return () => {
         listeners = listeners.filter((l) => l !== listener);
-        if (listeners.length === 0 && intervalId !== null) {
-          clearInterval(intervalId);
-          intervalId = null;
+        if (listeners.length === 0) {
+          if (intervalId !== null) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
+          storeCache.delete(clientId);
         }
       };
     },

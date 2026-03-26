@@ -246,6 +246,20 @@ export interface ServerLogEntry {
   detail?: string;
 }
 
+export interface Env {
+  DB: D1Database;
+  ARCHIVE: R2Bucket;
+  METRICS: AnalyticsEngineDataset;
+  CLIENT_MONITOR: DurableObjectNamespace;
+  ADMIN_JWT_SECRET: string;
+  RESEND_API_KEY: string;
+  ALERT_FROM_EMAIL: string;
+  ALERT_TO_EMAIL: string;
+  TELEGRAM_BOT_TOKEN: string;
+  TELEGRAM_CHAT_ID: string;
+  LATEST_CLIENT_VERSION: string;
+}
+
 export type WSMessage =
   | { type: "ping"; id: string; ts: number; payload?: ArrayBuffer }
   | { type: "pong"; id: string; ts: number; client_ts: number }

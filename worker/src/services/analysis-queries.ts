@@ -115,9 +115,8 @@ export async function runAnalysis(
   to: string
 ): Promise<Record<string, unknown[]>> {
   const queries = buildAnalysisQueries(clientId, from, to);
-  const results = await Promise.all(
-    queries.map((q) => db.prepare(q.sql).bind(...q.params).all())
-  );
+  const stmts = queries.map((q) => db.prepare(q.sql).bind(...q.params));
+  const results = await db.batch(stmts);
 
   const output: Record<string, unknown[]> = {};
   queries.forEach((q, i) => {

@@ -38,12 +38,32 @@ function fmtDate(iso: string): string {
   return iso.replace("T", " ").replace(/\.\d+Z$/, " UTC").replace("Z", " UTC");
 }
 
+function fmtDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.round(seconds % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function fmtTime(iso: string): string {
+  return iso.replace("T", " ").replace(/:\d{2}\.\d+Z$/, " UTC").replace(/:\d{2}Z$/, " UTC");
+}
+
+interface OutageEvent {
+  start_ts: string;
+  end_ts: string | null;
+  duration_s: number | null;
+}
+
 interface ParsedReportData {
   pings: PingStat[];
   alerts: AlertSummary[];
   speeds: SpeedStat[];
   counts: RecordCount[];
   probeStats: { probe_type: string; target: string; status: string; count: number; avg_rtt: number | null }[];
+  outageEvents: OutageEvent[];
 }
 
 function parseReportData(data: Record<string, unknown[]>): ParsedReportData {
@@ -53,6 +73,7 @@ function parseReportData(data: Record<string, unknown[]>): ParsedReportData {
     speeds: (data.speed_test_stats || []) as SpeedStat[],
     counts: (data.record_counts || []) as RecordCount[],
     probeStats: (data.probe_stats || []) as ParsedReportData["probeStats"],
+    outageEvents: (data.outage_events || []) as OutageEvent[],
   };
 }
 
@@ -60,9 +81,10 @@ export function formatTelegramReport(
   clientName: string,
   from: string,
   to: string,
-  data: Record<string, unknown[]>
+  data: Record<string, unknown[]>,
+  isDown?: boolean
 ): string {
-  const { pings, alerts, speeds, counts } = parseReportData(data);
+  const { pings, alerts, speeds, counts, outageEvents } = parseReportData(data);
   const cfTo = pings.find((p) => p.direction === "cf_to_client" && p.status === "ok");
   const toCf = pings.find((p) => p.direction === "client_to_cf" && p.status === "ok");
   const totalAlerts = alerts.reduce((sum, a) => sum + a.count, 0);
@@ -75,16 +97,30 @@ export function formatTelegramReport(
   const totalErrors = (data.recent_errors as unknown[])?.length || 0;
   const errorPct = totalProbes > 0 ? ((totalErrors / totalProbes) * 100).toFixed(2) : "0";
 
+  const statusLine = isDown ? "\u{1F534} Status: DOWN" : "\u{1F7E2} Status: Online";
+
   const lines = [
     `\u{1F4CA} PingPulse Daily Report \u2014 ${clientName}`,
     `\u23F1 Period: ${fmtDate(from)} \u2192 ${fmtDate(to)}`,
     "",
+    statusLine,
     `\u{1F4E1} Latency: ${cfTo?.avg_rtt?.toFixed(1) || "N/A"}ms (CF\u2192) / ${toCf?.avg_rtt?.toFixed(1) || "N/A"}ms (\u2192CF)`,
     `\u26A1 Speed: ${speed ? `${speed.avg_dl.toFixed(0)} Mbps \u2193 / ${speed.avg_ul.toFixed(0)} Mbps \u2191` : "N/A"}`,
     `\u26A0\uFE0F Alerts: ${totalAlerts}${alertBreakdown ? ` (${alertBreakdown})` : ""}`,
     `\u274C Errors: ${totalErrors} probes failed (${errorPct}%)`,
     `\u{1F4CB} Outages: ${outageCount}`,
   ];
+
+  if (outageEvents.length > 0) {
+    lines.push("");
+    lines.push("\u{1F6A8} Outage Details:");
+    for (const o of outageEvents) {
+      const start = fmtTime(o.start_ts);
+      const end = o.end_ts ? fmtTime(o.end_ts) : "ongoing";
+      const dur = o.duration_s != null ? ` (${fmtDuration(o.duration_s)})` : "";
+      lines.push(`  \u2022 ${start} \u2192 ${end}${dur}`);
+    }
+  }
 
   return lines.join("\n");
 }
@@ -93,7 +129,8 @@ export function formatEmailReport(
   clientName: string,
   from: string,
   to: string,
-  data: Record<string, unknown[]>
+  data: Record<string, unknown[]>,
+  isDown?: boolean
 ): string {
   const { pings, alerts, speeds, probeStats } = parseReportData(data);
 
@@ -101,9 +138,13 @@ export function formatEmailReport(
   const thStyle = `style="text-align:left;padding:6px 10px;border-bottom:2px solid #333;color:#999;"`;
   const tdStyle = `style="padding:6px 10px;border-bottom:1px solid #222;color:#ddd;"`;
 
+  const statusColor = isDown ? "#ef4444" : "#22c55e";
+  const statusText = isDown ? "DOWN" : "Online";
+
   let html = `<html><body style="background:#0a0a0a;color:#e4e4e7;font-family:system-ui,sans-serif;padding:20px;">`;
   html += `<h1 style="color:#fff;font-size:18px;">PingPulse Health Report \u2014 ${clientName}</h1>`;
   html += `<p style="color:#71717a;font-size:13px;">Period: ${fmtDate(from)} \u2192 ${fmtDate(to)}</p>`;
+  html += `<p style="font-size:14px;font-weight:600;color:${statusColor};">\u25CF ${statusText}</p>`;
 
   // Ping stats
   if (pings.length > 0) {
