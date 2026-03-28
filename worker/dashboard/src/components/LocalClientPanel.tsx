@@ -88,12 +88,12 @@ export function LocalClientPanel({ onUninstalled }: Props) {
 
   const handleRemoveService = () => {
     if (!confirm("Remove the PingPulse system service from this machine? The binary will remain.")) return;
-    runAction("Remove Service", localAgent.serviceRemove);
+    void runAction("Remove Service", localAgent.serviceRemove);
   };
 
   const handleFullUninstall = () => {
     if (!confirm("This will remove all PingPulse services, config, and logs from this machine and delete the client from the server. This cannot be undone. Continue?")) return;
-    runAction("Full Uninstall", async () => {
+    void runAction("Full Uninstall", async () => {
       const res = await localAgent.serviceUninstall();
       if (res.ok) {
         setDetected(false);

@@ -57,10 +57,8 @@ async function archiveClient(
   });
 
   // Delete archived records in batches
-  const deleteInBatches = async (table: string, idCol: string) => {
-    const ids = (table === "ping_results" ? oldPings : oldSpeedTests).map(
-      (r) => r.id as string
-    );
+  const deleteInBatches = async (table: string, idCol: string, rows: Record<string, unknown>[]) => {
+    const ids = rows.map((r) => r.id as string);
     for (let i = 0; i < ids.length; i += DELETE_BATCH_SIZE) {
       const batch = ids.slice(i, i + DELETE_BATCH_SIZE);
       const placeholders = batch.map(() => "?").join(",");
@@ -72,8 +70,8 @@ async function archiveClient(
     }
   };
 
-  await deleteInBatches("ping_results", "id");
-  await deleteInBatches("speed_tests", "id");
+  await deleteInBatches("ping_results", "id", oldPings);
+  await deleteInBatches("speed_tests", "id", oldSpeedTests);
 
   return oldPings.length + oldSpeedTests.length;
 }
@@ -90,9 +88,9 @@ export async function archiveOldRecords(
     "SELECT id FROM clients"
   ).all();
 
-  const results = await Promise.all(
-    clients.map((client) => archiveClient(env, client.id as string, cutoff))
-  );
-
-  return results.reduce((sum, n) => sum + n, 0);
+  let total = 0;
+  for (const client of clients) {
+    total += await archiveClient(env, client.id as string, cutoff);
+  }
+  return total;
 }

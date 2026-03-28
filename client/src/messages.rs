@@ -11,17 +11,12 @@ pub enum SpeedTestType {
     Full,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum SpeedTestTarget {
+    #[default]
     Worker,
     Edge,
-}
-
-impl Default for SpeedTestTarget {
-    fn default() -> Self {
-        Self::Worker
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

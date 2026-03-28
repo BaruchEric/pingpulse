@@ -10,7 +10,6 @@ mod service;
 mod speed_test;
 mod probe;
 mod store;
-#[allow(dead_code)]
 mod sync;
 mod websocket;
 

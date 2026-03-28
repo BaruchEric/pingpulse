@@ -52,8 +52,8 @@ pingpulse/
 |   |   +-- config.rs           # Config file management
 |   |   +-- register.rs         # Token-based registration
 |   |   +-- messages.rs         # WebSocket message types (incoming/outgoing)
-|   |   +-- store.rs            # SQLite probe storage + sync
-|   |   +-- sync.rs             # Batch sync of probe results to server
+|   |   +-- store.rs            # SQLite probe storage + sync + connectivity events
+|   |   +-- sync.rs             # Batch sync of probe results + connectivity events to server
 |   |   +-- probe.rs            # ICMP and HTTP probe engine
 |   |   +-- logging.rs          # Structured logging
 |   +-- Cargo.toml
@@ -68,6 +68,7 @@ pingpulse/
 |   |   |   +-- alerts.ts       # Alert thresholds + listing
 |   |   |   +-- speedtest.ts    # On-demand speed test triggers + payload endpoints
 |   |   |   +-- export.ts       # CSV/JSON export from R2
+|   |   |   +-- connectivity.ts # Client-reported connectivity events (outage backfill)
 |   |   |   +-- command.ts      # Send commands to Durable Objects
 |   |   +-- durable-objects/
 |   |   |   +-- client-monitor.ts   # Per-client Durable Object (pings, state machine)
@@ -386,7 +387,8 @@ Configuration is pushed from the dashboard via WebSocket. Configurable parameter
 | `full_test_payload_bytes` | 10485760 (10MB) | Payload for full speed tests |
 | `alert_latency_threshold_ms` | 100 | Latency alert threshold |
 | `alert_loss_threshold_pct` | 5 | Packet loss alert threshold |
-| `grace_period_s` | 60 | Grace period before alerting |
+| `grace_period_s` | 60 | Grace period before alerting on reconnect |
+| `down_alert_grace_seconds` | 60 | Grace period before client_down alert fires |
 
 ---
 
@@ -465,6 +467,26 @@ Update global alert thresholds.
 ### POST /api/alerts/test
 Send a test alert to verify email/Telegram configuration.
 
+## Client Connectivity (Client-Facing)
+
+### POST /api/clients/:id/connectivity
+Client-reported connectivity events (authenticated with client secret, not admin JWT). The client records `connected`/`disconnected` events locally and syncs them on reconnect. The server pairs events into outages and sends retrospective alerts if server-side detection missed the outage.
+```json
+{
+  "events": [
+    { "event": "disconnected", "timestamp": 1711234567890, "reason": "ws_closed" },
+    { "event": "connected", "timestamp": 1711234627890 }
+  ]
+}
+```
+Response:
+```json
+{ "ok": true, "outages_created": 1 }
+```
+- Max 200 events per batch
+- Events shorter than the client's grace period are skipped
+- Duplicate outages (within ±30s of an existing one) are deduplicated
+
 ## Speed Tests
 
 ### POST /api/speedtest/:id
@@ -519,7 +541,8 @@ Messages from client:
 
 | Type | Severity | Trigger |
 |------|----------|---------|
-| `client_down` | critical | Client disconnected beyond grace period |
+| `client_down` | critical | Client disconnected beyond grace period (server-detected) |
+| `client_down` | warning | Client-reported outage synced retrospectively on reconnect |
 | `client_up` | info | Client reconnected after outage |
 | `high_latency` | warning | RTT exceeds threshold |
 | `latency_recovered` | info | RTT returned to normal |
@@ -619,7 +642,7 @@ bun run test
 
 ## Client shows as offline in dashboard
 - Check client is running: `pingpulse status`
-- WebSocket may have disconnected -- client auto-reconnects with exponential backoff
+- WebSocket may have disconnected -- client auto-reconnects with exponential backoff and syncs connectivity events + buffered probes on reconnect
 - Check the server logs: `wrangler tail` (live logs from Worker)
 
 ## Alerts not delivering

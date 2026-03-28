@@ -2,7 +2,7 @@ use anyhow::Result;
 use reqwest::Client as HttpClient;
 use tracing::{debug, info, warn};
 
-use crate::store::{ProbeRecord, ProbeStore};
+use crate::store::{ConnectivityEvent, ProbeRecord, ProbeStore};
 
 #[derive(Debug, serde::Serialize)]
 struct SyncBatch {
@@ -15,6 +15,11 @@ struct SyncResponse {
     acked_seq: i64,
     #[serde(default)]
     throttle_ms: Option<u64>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ConnectivityBatch {
+    events: Vec<ConnectivityEvent>,
 }
 
 pub struct SyncClient {
@@ -34,6 +39,46 @@ impl SyncClient {
             client_secret: client_secret.to_string(),
             batch_size,
         }
+    }
+
+    /// Drain all unsynced connectivity events to the server.
+    pub async fn sync_connectivity(&self, store: &ProbeStore) -> Result<usize> {
+        let mut total = 0;
+        loop {
+            let events = store.get_unsynced_connectivity(100)?;
+            if events.is_empty() {
+                break;
+            }
+            let ids: Vec<i64> = events.iter().map(|e| e.id).collect();
+            let batch_len = events.len();
+            let batch = ConnectivityBatch { events };
+            let url = format!(
+                "{}/api/clients/{}/connectivity",
+                self.base_url, self.client_id
+            );
+            let resp = self
+                .http
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", self.client_secret))
+                .json(&batch)
+                .send()
+                .await?;
+
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let body = resp.text().await.unwrap_or_default();
+                warn!(status = %status, body, "Connectivity sync failed");
+                anyhow::bail!("Connectivity sync failed with status {status}");
+            }
+
+            store.mark_connectivity_synced(&ids)?;
+            total += batch_len;
+            info!(synced = batch_len, total, "Connectivity sync batch complete");
+            if batch_len < 100 {
+                break;
+            }
+        }
+        Ok(total)
     }
 
     /// Drain all unsynced records to the server. Returns total records synced.

@@ -5,14 +5,18 @@ const KEYS = {
 
 export { KEYS as BOT_SETTING_KEYS };
 
-export async function getMuteUntil(db: D1Database): Promise<number | null> {
+async function getSetting(db: D1Database, key: string): Promise<string | null> {
   const row = await db
     .prepare("SELECT value FROM bot_settings WHERE key = ?")
-    .bind(KEYS.MUTED_UNTIL)
+    .bind(key)
     .first<{ value: string }>();
+  return row?.value ?? null;
+}
 
-  if (!row) return null;
-  const until = parseInt(row.value, 10);
+export async function getMuteUntil(db: D1Database): Promise<number | null> {
+  const value = await getSetting(db, KEYS.MUTED_UNTIL);
+  if (!value) return null;
+  const until = parseInt(value, 10);
   if (until <= Date.now()) {
     await db.prepare("DELETE FROM bot_settings WHERE key = ?").bind(KEYS.MUTED_UNTIL).run();
     return null;
@@ -21,11 +25,7 @@ export async function getMuteUntil(db: D1Database): Promise<number | null> {
 }
 
 export async function getDefaultClient(db: D1Database): Promise<string | null> {
-  const row = await db
-    .prepare("SELECT value FROM bot_settings WHERE key = ?")
-    .bind(KEYS.DEFAULT_CLIENT)
-    .first<{ value: string }>();
-  return row?.value ?? null;
+  return getSetting(db, KEYS.DEFAULT_CLIENT);
 }
 
 export async function setDefaultClient(db: D1Database, clientId: string): Promise<void> {

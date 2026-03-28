@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::Result;
 use reqwest::Client as HttpClient;
 use std::net::IpAddr;
@@ -101,13 +99,8 @@ impl ProbeEngine {
     pub async fn probe_http(&self, target: &HttpTarget, timeout_ms: u64) -> ProbeRecord {
         let now_ms = chrono::Utc::now().timestamp_millis();
 
-        let client = HttpClient::builder()
-            .timeout(Duration::from_millis(timeout_ms))
-            .build()
-            .unwrap_or_else(|_| self.http_client.clone());
-
         let start = Instant::now();
-        match client.head(&target.url).send().await {
+        match self.http_client.head(&target.url).timeout(Duration::from_millis(timeout_ms)).send().await {
             Ok(resp) => {
                 let rtt_ms = start.elapsed().as_secs_f64() * 1000.0;
                 let status_code = i32::from(resp.status().as_u16());

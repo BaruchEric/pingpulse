@@ -54,6 +54,7 @@ alertRoutes.put("/", async (c) => {
     values.push(body.default_loss_threshold_pct);
   }
 
+  // Intentionally updates ALL clients — this is the global defaults endpoint
   await c.env.DB.prepare(
     `UPDATE clients SET ${updates.join(", ")}`
   )

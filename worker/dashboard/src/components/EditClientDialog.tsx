@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import type { Client, AlertType } from "@/lib/types";
 import { SectionHeader } from "@/components/SectionHeader";
+import { useEscapeKey } from "@/lib/hooks";
 
 const ALERT_SOUND_OPTIONS: { key: AlertType; label: string; thresholdField?: "latencyThreshold" | "lossThreshold"; unit?: string }[] = [
   { key: "client_down", label: "Client Down" },
@@ -46,15 +47,22 @@ function Toggle({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <label className="relative inline-flex cursor-pointer items-center">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          className="peer sr-only"
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+          checked ? "bg-[var(--color-accent)]" : "bg-zinc-700"
+        }`}
+      >
+        <span
+          className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+            checked ? "translate-x-4" : "translate-x-0.5"
+          }`}
         />
-        <div className="h-5 w-9 rounded-full bg-zinc-700 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-zinc-400 after:transition-all peer-checked:bg-[var(--color-accent)] peer-checked:after:translate-x-full peer-checked:after:bg-white" />
-      </label>
+      </button>
       <span className="text-sm text-zinc-300">{label}</span>
     </div>
   );
@@ -110,6 +118,8 @@ export function EditClientDialog({
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+
+  useEscapeKey(onClose);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

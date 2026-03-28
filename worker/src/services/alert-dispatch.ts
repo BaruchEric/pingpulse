@@ -62,7 +62,7 @@ export async function dispatchAlert(
   }
 
   if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
-    // Check mute status (critical alerts always go through)
+    // Check mute status up-front so email promise can start in parallel
     const muteUntil = await getMuteUntil(env.DB);
     const isMuted = muteUntil !== null && alert.severity !== "critical";
 

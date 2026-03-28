@@ -141,6 +141,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             }
             Ok(Shutdown::Disconnected) => {
                 consecutive_auth_failures = 0;
+                #[allow(clippy::cast_possible_wrap)]
+                let ts = now_ms() as i64;
+                store.insert_connectivity_event("disconnected", ts, Some("ws_closed")).ok();
                 let delay = backoff.next_delay();
                 #[allow(clippy::cast_possible_truncation)]
                 let delay_ms = delay.as_millis() as u64;
@@ -188,6 +191,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                     consecutive_auth_failures = 0;
                 }
 
+                #[allow(clippy::cast_possible_wrap)]
+                let ts = now_ms() as i64;
+                store.insert_connectivity_event("disconnected", ts, Some(&err_str)).ok();
                 let delay = backoff.next_delay();
                 #[allow(clippy::cast_possible_truncation)]
                 let delay_ms = delay.as_millis() as u64;
@@ -261,7 +267,13 @@ async fn connect_and_run(
     info!(event = "ws_connected");
     backoff.reset();
 
-    // Trigger sync drain on reconnect (fire-and-forget)
+    // Record connectivity event
+    #[allow(clippy::cast_possible_wrap)]
+    let conn_ts = now_ms() as i64;
+    store.insert_connectivity_event("connected", conn_ts, None).ok();
+
+    // Trigger sync drain on reconnect (fire-and-forget):
+    // connectivity events first (so server knows about outages), then probe data
     tokio::spawn({
         let sync_store = store.clone_handle();
         let base_url = config.server.base_url.clone();
@@ -270,6 +282,11 @@ async fn connect_and_run(
         let batch_size = config.sync.batch_size;
         async move {
             let sc = SyncClient::new(&base_url, &client_id, &client_secret, batch_size);
+            match sc.sync_connectivity(&sync_store).await {
+                Ok(n) if n > 0 => info!(records = n, "Connectivity sync complete"),
+                Ok(_) => {}
+                Err(e) => warn!(error = %e, "Connectivity sync failed"),
+            }
             match sc.sync_all(&sync_store).await {
                 Ok(n) if n > 0 => info!(records = n, "Reconnect sync complete"),
                 Ok(_) => {}
@@ -289,6 +306,13 @@ async fn connect_and_run(
     sync_interval.tick().await; // Skip the immediate first tick
 
     let (speed_tx, mut speed_rx) = mpsc::unbounded_channel::<OutgoingMessage>();
+
+    let sync_client = SyncClient::new(
+        &config.server.base_url,
+        &config.server.client_id,
+        &config.server.client_secret,
+        config.sync.batch_size,
+    );
 
     let shutdown = shutdown_signal();
     tokio::pin!(shutdown);
@@ -394,12 +418,6 @@ async fn connect_and_run(
             // Periodic sync of accumulated probe results
             _ = sync_interval.tick() => {
                 let sync_store = store.clone_handle();
-                let sync_client = SyncClient::new(
-                    &config.server.base_url,
-                    &config.server.client_id,
-                    &config.server.client_secret,
-                    config.sync.batch_size,
-                );
                 if let Err(e) = sync_client.sync_all(&sync_store).await {
                     warn!(error = %e, "Sync failed, will retry next interval");
                 }

@@ -66,6 +66,10 @@ export class ClientMonitor implements DurableObject {
     this.clientId = state.id.name ?? "";
   }
 
+  private get gracePeriodMs(): number {
+    return (this.config.down_alert_grace_seconds ?? this.config.grace_period_s) * 1000;
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
@@ -113,6 +117,15 @@ export class ClientMonitor implements DurableObject {
     }
     if (authResult === "invalid") {
       return new Response("Unauthorized", { status: 401 });
+    }
+
+    // Reject reconnection during admin-disconnect grace window
+    const adminBlock = await this.state.storage.get<number>("adminDisconnectUntil");
+    if (adminBlock && Date.now() < adminBlock) {
+      return new Response("Admin disconnect in effect", { status: 503 });
+    }
+    if (adminBlock) {
+      await this.state.storage.delete("adminDisconnectUntil");
     }
 
     // Capture client version from query param (primary) or header (fallback)
@@ -382,7 +395,7 @@ export class ClientMonitor implements DurableObject {
       this.disconnectedAt = await this.state.storage.get<number>("disconnectedAt") ?? null;
     }
     if (this.disconnectedAt && this.sessions.length === 0) {
-      const gracePeriod = (this.config.down_alert_grace_seconds ?? this.config.grace_period_s) * 1000;
+      const gracePeriod = this.gracePeriodMs;
       const elapsed = Date.now() - this.disconnectedAt;
       if (elapsed >= gracePeriod) {
         await this.triggerAlert(
@@ -412,7 +425,10 @@ export class ClientMonitor implements DurableObject {
 
     // Detect dead connections using durable storage (survives hibernation).
     // If no message received from the client in MAX_CONSECUTIVE_TIMEOUTS * ping_interval,
-    // the connection is dead — force-close so handleSessionDrop fires the alert.
+    // the connection is dead — set disconnect state directly and schedule
+    // the grace alarm. We can't rely on webSocketClose firing promptly
+    // because the remote end may be unreachable (e.g. network cable pulled)
+    // and the TCP close handshake would hang indefinitely.
     if (this.sessions.length > 0) {
       const lastActivity = await this.state.storage.get<number>("lastClientActivity") ?? 0;
       const deadThresholdMs = this.config.ping_interval_s * 1000 * MAX_CONSECUTIVE_TIMEOUTS;
@@ -421,7 +437,13 @@ export class ClientMonitor implements DurableObject {
         for (const ws of this.sessions) {
           try { ws.close(1001, "Dead connection detected"); } catch { /* already closed */ }
         }
-        return; // webSocketClose handler will set the disconnect alarm
+        // Set disconnection state directly instead of waiting for webSocketClose
+        const now = Date.now();
+        this.disconnectedAt = now;
+        await this.state.storage.put("disconnectedAt", now);
+        const grace = this.gracePeriodMs;
+        await this.state.storage.setAlarm(now + grace);
+        return;
       }
     }
 
@@ -457,11 +479,19 @@ export class ClientMonitor implements DurableObject {
     // The closing WS may still be in getWebSockets() at this point
     const remaining = this.sessions.filter(s => s !== closingWs);
     if (remaining.length === 0) {
+      // Skip if dead-connection detection already set the disconnect state —
+      // a late webSocketClose from a hung TCP close shouldn't reset the timer.
+      if (this.disconnectedAt) return;
+      const stored = await this.state.storage.get<number>("disconnectedAt");
+      if (stored) {
+        this.disconnectedAt = stored;
+        return;
+      }
       const now = Date.now();
       this.disconnectedAt = now;
       await this.state.storage.put("disconnectedAt", now);
       await this.ensureConfigLoaded();
-      const grace = (this.config.down_alert_grace_seconds ?? this.config.grace_period_s) * 1000;
+      const grace = this.gracePeriodMs;
       await this.state.storage.setAlarm(now + grace);
     }
   }
@@ -639,16 +669,13 @@ export class ClientMonitor implements DurableObject {
 
     await this.env.DB.batch(stmts);
 
-    // Write to Analytics Engine
+    // Write to Analytics Engine (latency + jitter in a single datapoint)
     for (const r of batch) {
       if (r.status === "ok") {
         this.env.METRICS.writeDataPoint({
-          blobs: [r.client_id, "latency"],
-          doubles: [r.rtt_ms],
-        });
-        this.env.METRICS.writeDataPoint({
-          blobs: [r.client_id, "jitter"],
-          doubles: [r.jitter_ms],
+          blobs: [r.client_id, "ping"],
+          doubles: [r.rtt_ms, r.jitter_ms],
+          indexes: [r.client_id],
         });
       }
     }
@@ -764,6 +791,12 @@ export class ClientMonitor implements DurableObject {
       }
 
       case "disconnect": {
+        // Block reconnection for grace period so the disconnect alert can fire.
+        // Without this, auto-reconnecting clients rejoin within seconds and
+        // silently cancel the pending grace-period alarm.
+        await this.ensureConfigLoaded();
+        const grace = this.gracePeriodMs;
+        await this.state.storage.put("adminDisconnectUntil", Date.now() + grace + 30_000);
         this.closeAllSessions("Admin disconnect");
         return Response.json({ ok: true, message: "Client disconnected" });
       }

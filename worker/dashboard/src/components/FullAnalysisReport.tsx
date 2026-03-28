@@ -1,5 +1,6 @@
 import { memo, useMemo } from "react";
 import type { AnalysisResponse, Client } from "@/lib/types";
+import { formatDuration, formatAlertType, SEVERITY_COLOR } from "@/lib/format";
 
 function fmt(ms: number | null | undefined): string {
   if (ms == null) return "—";
@@ -8,10 +9,7 @@ function fmt(ms: number | null | undefined): string {
 
 function fmtDuration(seconds: number | null): string {
   if (seconds == null) return "ongoing";
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  return s > 0 ? `${m} min ${s} sec` : `${m} min`;
+  return formatDuration(seconds, true);
 }
 
 function fmtTs(ts: string | null): string {
@@ -74,13 +72,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+const DIST_COLORS = {
+  "bg-emerald-500": { inner: "bg-emerald-500", outer: "bg-emerald-500/30" },
+  "bg-blue-500": { inner: "bg-blue-500", outer: "bg-blue-500/30" },
+} as const;
+
 function LatencyDistTable({
   title,
   color,
   dist,
 }: {
   title: string;
-  color: string;
+  color: keyof typeof DIST_COLORS;
   dist: AnalysisResponse["latency_distribution"];
 }) {
   const total = dist.reduce((s, d) => s + d.count, 0);
@@ -105,9 +108,9 @@ function LatencyDistTable({
                 <td className={TD_R}>{d.count.toLocaleString()}</td>
                 <td className={TD_R}>{pct(d.count, total)}</td>
                 <td className="px-3 py-2">
-                  <div className={`h-3 rounded-sm ${color}/30`}>
+                  <div className={`h-3 rounded-sm ${DIST_COLORS[color].outer}`}>
                     <div
-                      className={`h-full rounded-sm ${color}`}
+                      className={`h-full rounded-sm ${DIST_COLORS[color].inner}`}
                       style={{ width: `${(d.count / total) * 100}%` }}
                     />
                   </div>
@@ -507,10 +510,8 @@ export const FullAnalysisReport = memo(function FullAnalysisReport({
                   <tbody>
                     {data.alert_summary.map((a, i) => (
                       <tr key={i} className="border-b border-zinc-800/50">
-                        <td className={TD}>{a.type.replace(/_/g, " ")}</td>
-                        <td className={`px-3 py-2 text-sm font-medium ${
-                          a.severity === "critical" ? "text-red-400" : a.severity === "warning" ? "text-amber-400" : "text-blue-400"
-                        }`}>
+                        <td className={TD}>{formatAlertType(a.type)}</td>
+                        <td className={`px-3 py-2 text-sm font-medium ${SEVERITY_COLOR[a.severity] ?? "text-zinc-400"}`}>
                           {a.severity}
                         </td>
                         <td className={TD_R}>{a.count}</td>

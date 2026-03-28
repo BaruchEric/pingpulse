@@ -94,7 +94,8 @@ export function formatTelegramReport(
   const speed = fullSpeed || probeSpeed;
   const outageCount = counts.find((c) => c.tbl === "outages")?.cnt || 0;
   const totalProbes = counts.find((c) => c.tbl === "client_probe_results")?.cnt || 0;
-  const totalErrors = (data.recent_errors as unknown[])?.length || 0;
+  const totalErrors = ((data.hourly_pattern || []) as { errors: number }[])
+    .reduce((sum, h) => sum + (h.errors ?? 0), 0);
   const errorPct = totalProbes > 0 ? ((totalErrors / totalProbes) * 100).toFixed(2) : "0";
 
   const statusLine = isDown ? "\u{1F534} Status: DOWN" : "\u{1F7E2} Status: Online";

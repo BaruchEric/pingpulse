@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
 import { sendTelegramMessage } from "@/services/notify";
-import { getMuteUntil, getDefaultClient, setDefaultClient, BOT_SETTING_KEYS } from "@/services/bot-settings";
+import { getMuteUntil, getDefaultClient, setDefaultClient } from "@/services/bot-settings";
+import { sendDOCommand } from "@/utils/do-client";
 import type { ClientRecord } from "@/types";
 
 interface TelegramUpdate {
@@ -29,22 +30,6 @@ type CommandHandler = (
   ctx: BotContext,
   args: string[]
 ) => Promise<string | null>;
-
-async function sendDOCommand(
-  env: AppEnv["Bindings"],
-  clientId: string,
-  command: string,
-  params?: Record<string, unknown>
-): Promise<boolean> {
-  const doId = env.CLIENT_MONITOR.idFromName(clientId);
-  const stub = env.CLIENT_MONITOR.get(doId);
-  const resp = await stub.fetch("http://internal/command", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params ? { command, params } : { command }),
-  });
-  return resp.ok;
-}
 
 function buildClientKeyboard(
   clients: { id: string; name: string }[],
@@ -203,10 +188,10 @@ const handleMute: CommandHandler = async ({ env }, args) => {
   const until = Date.now() + minutes * 60_000;
 
   await env.DB.prepare(
-    `INSERT INTO bot_settings (key, value, updated_at) VALUES ('${BOT_SETTING_KEYS.MUTED_UNTIL}', ?, datetime('now'))
+    `INSERT INTO bot_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
   )
-    .bind(String(until))
+    .bind("muted_until", String(until))
     .run();
 
   return `\u{1F515} Notifications muted for ${minutes} minutes\nUnmute with /unmute`;
@@ -214,8 +199,8 @@ const handleMute: CommandHandler = async ({ env }, args) => {
 
 const handleUnmute: CommandHandler = async ({ env }) => {
   await env.DB.prepare(
-    `DELETE FROM bot_settings WHERE key = '${BOT_SETTING_KEYS.MUTED_UNTIL}'`
-  ).run();
+    "DELETE FROM bot_settings WHERE key = ?"
+  ).bind("muted_until").run();
 
   return "\u{1F514} Notifications unmuted";
 };

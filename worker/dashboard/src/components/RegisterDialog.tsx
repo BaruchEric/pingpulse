@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { api } from "@/lib/api";
+import { useEscapeKey } from "@/lib/hooks";
 
 type Platform = "unix" | "windows";
 
@@ -10,6 +11,8 @@ export function RegisterDialog({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const [platform, setPlatform] = useState<Platform>("unix");
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEscapeKey(onClose);
 
   useEffect(() => () => clearTimeout(copyTimerRef.current), []);
 

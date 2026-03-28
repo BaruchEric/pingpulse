@@ -2,16 +2,17 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:test";
 import { createRouter } from "@/api/router";
 import { hashString } from "@/utils/hash";
+import { resetRateLimits } from "@/middleware/rate-limit";
 
 const app = createRouter();
 let adminCookie: string;
 
 async function setup() {
+  resetRateLimits();
   await env.DB.exec("DELETE FROM admin");
   await env.DB.exec("DELETE FROM clients");
   await env.DB.exec("DELETE FROM ping_results");
   await env.DB.exec("DELETE FROM speed_tests");
-  await env.DB.exec("DELETE FROM rate_limits");
 
   const hash = await hashString("testpass123");
   await env.DB.prepare(

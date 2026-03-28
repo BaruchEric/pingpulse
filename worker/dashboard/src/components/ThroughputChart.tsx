@@ -7,6 +7,7 @@ import { DARK_AXIS } from "@/lib/chart-defaults";
 const OPTS: Omit<uPlot.Options, "width"> = {
   height: 200,
   class: "uplot-dark",
+  cursor: { show: true },
   scales: { x: { time: true }, y: { auto: true } },
   axes: [
     { ...DARK_AXIS },

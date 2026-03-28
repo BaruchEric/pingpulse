@@ -45,8 +45,17 @@ async function createJWT(secret: string): Promise<string> {
 function generateToken(length: number = 32): string {
   const chars =
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-  const bytes = crypto.getRandomValues(new Uint8Array(length));
-  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+  const maxValid = 248; // largest multiple of 62 below 256 — avoids modulo bias
+  const result: string[] = [];
+  while (result.length < length) {
+    const bytes = crypto.getRandomValues(new Uint8Array(length - result.length + 8));
+    for (const b of bytes) {
+      const ch = chars[b % chars.length];
+      if (b < maxValid && ch) result.push(ch);
+      if (result.length === length) break;
+    }
+  }
+  return result.join("");
 }
 
 // Login: 5 attempts/min
@@ -125,16 +134,13 @@ authRoutes.post("/register", async (c) => {
   const secretHash = await hashString(clientSecret);
   const now = new Date().toISOString();
 
-  await c.env.DB.prepare(
-    "UPDATE registration_tokens SET used_at = ?, used_by_client_id = ? WHERE id = ?"
-  )
-    .bind(now, clientId, row.id)
-    .run();
-
-  await c.env.DB.prepare(
-    "INSERT INTO clients (id, name, location, secret_hash, config_json, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  )
-    .bind(
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      "UPDATE registration_tokens SET used_at = ?, used_by_client_id = ? WHERE id = ?"
+    ).bind(now, clientId, row.id),
+    c.env.DB.prepare(
+      "INSERT INTO clients (id, name, location, secret_hash, config_json, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).bind(
       clientId,
       name,
       location,
@@ -142,8 +148,8 @@ authRoutes.post("/register", async (c) => {
       JSON.stringify(DEFAULT_CLIENT_CONFIG),
       now,
       now
-    )
-    .run();
+    ),
+  ]);
 
   const wsUrl = `/ws/${clientId}`;
   return c.json({ client_id: clientId, client_secret: clientSecret, ws_url: wsUrl });

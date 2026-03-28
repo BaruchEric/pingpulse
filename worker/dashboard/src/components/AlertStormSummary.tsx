@@ -1,4 +1,5 @@
 import type { AnalysisResponse } from "@/lib/types";
+import { formatAlertType, SEVERITY_COLOR } from "@/lib/format";
 
 export function AlertStormSummary({ summary }: { summary: AnalysisResponse["alert_summary"] }) {
   if (summary.length === 0) return <div className="text-sm text-zinc-400">No alerts in this period</div>;
@@ -26,8 +27,8 @@ export function AlertStormSummary({ summary }: { summary: AnalysisResponse["aler
           <tbody>
             {summary.map((a, i) => (
               <tr key={i} className="border-b border-zinc-800/50">
-                <td className="py-2 pr-3 font-mono text-zinc-300">{a.type.replace(/_/g, " ")}</td>
-                <td className={`py-2 pr-3 font-medium ${a.severity === "critical" ? "text-red-400" : a.severity === "warning" ? "text-amber-400" : "text-blue-400"}`}>{a.severity}</td>
+                <td className="py-2 pr-3 font-mono text-zinc-300">{formatAlertType(a.type)}</td>
+                <td className={`py-2 pr-3 font-medium ${SEVERITY_COLOR[a.severity] ?? "text-zinc-400"}`}>{a.severity}</td>
                 <td className="py-2 pr-3 text-right font-mono text-zinc-300">{a.count}</td>
                 <td className="py-2 pr-3 text-right font-mono text-zinc-300">{a.avg_value.toFixed(1)}</td>
                 <td className="py-2 pr-3 text-right font-mono text-zinc-300">{a.max_value}</td>

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
+import { requireClient } from "@/utils/do-client";
 
 export const exportRoutes = new Hono<AppEnv>();
 
@@ -14,23 +15,18 @@ exportRoutes.get("/:id", async (c) => {
     new Date(Date.now() - 7 * 86400_000).toISOString();
   const to = c.req.query("to") || new Date().toISOString();
 
-  // Verify client exists
-  const client = await c.env.DB.prepare(
-    "SELECT id FROM clients WHERE id = ?"
-  )
-    .bind(clientId)
-    .first();
-  if (!client) return c.json({ error: "Client not found" }, 404);
+  if (!await requireClient(c.env.DB, clientId)) return c.json({ error: "Client not found" }, 404);
 
-  // Fetch pings and speed tests in parallel
+  // Fetch pings and speed tests in parallel (limit to prevent OOM on large ranges)
+  const MAX_EXPORT_ROWS = 100_000;
   const [{ results: pings }, { results: speedTests }] = await Promise.all([
     c.env.DB.prepare(
-      "SELECT * FROM ping_results WHERE client_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp"
+      `SELECT * FROM ping_results WHERE client_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp LIMIT ${MAX_EXPORT_ROWS}`
     )
       .bind(clientId, from, to)
       .all(),
     c.env.DB.prepare(
-      "SELECT * FROM speed_tests WHERE client_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp"
+      `SELECT * FROM speed_tests WHERE client_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp LIMIT ${MAX_EXPORT_ROWS}`
     )
       .bind(clientId, from, to)
       .all(),

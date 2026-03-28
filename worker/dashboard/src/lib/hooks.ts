@@ -1,6 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 
+export function useEscapeKey(onClose: () => void) {
+  const callbackRef = useRef(onClose);
+
+  useEffect(() => {
+    callbackRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") callbackRef.current();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+}
+
 interface UsePollingResult<T> {
   data: T | null;
   error: Error | null;
@@ -55,7 +71,7 @@ function usePolling<T>(
 
 export function useClients(intervalMs = 10_000) {
   return usePolling(
-    () => api.listClients().then((r) => ({ clients: r.clients, latest_client_version: r.latest_client_version })),
+    () => api.listClients(),
     intervalMs
   );
 }

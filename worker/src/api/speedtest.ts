@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
 import { rateLimit } from "@/middleware/rate-limit";
+import { requireClient } from "@/utils/do-client";
 
 export const speedtestRoutes = new Hono<AppEnv>();
 
@@ -60,12 +61,7 @@ speedtestRoutes.post(
     const clientId = c.req.param("id");
     if (!clientId) return c.json({ error: "Missing client ID" }, 400);
 
-    const client = await c.env.DB.prepare(
-      "SELECT id FROM clients WHERE id = ?"
-    )
-      .bind(clientId)
-      .first();
-    if (!client) return c.json({ error: "Client not found" }, 404);
+    if (!await requireClient(c.env.DB, clientId)) return c.json({ error: "Client not found" }, 404);
 
     const doId = c.env.CLIENT_MONITOR.idFromName(clientId);
     const stub = c.env.CLIENT_MONITOR.get(doId);

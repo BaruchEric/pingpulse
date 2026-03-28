@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { useEscapeKey } from "@/lib/hooks";
 
 interface ReportModalProps {
   clientId: string;
@@ -9,6 +10,8 @@ interface ReportModalProps {
 export function ReportModal({ clientId, onClose }: ReportModalProps) {
   const [sending, setSending] = useState<string | null>(null);
   const [result, setResult] = useState<Record<string, boolean> | null>(null);
+
+  useEscapeKey(onClose);
 
   const handleSend = async (channel: "telegram" | "email" | "all") => {
     setSending(channel);
@@ -28,11 +31,14 @@ export function ReportModal({ clientId, onClose }: ReportModalProps) {
       const res = await api.generateReport(clientId);
       const blob = new Blob([JSON.stringify(res.report, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `pingpulse-report-${clientId}-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      try {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `pingpulse-report-${clientId}-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+      } finally {
+        URL.revokeObjectURL(url);
+      }
     } catch {
       setResult({ error: true });
     }

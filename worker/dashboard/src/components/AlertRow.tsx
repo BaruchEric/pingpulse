@@ -1,4 +1,5 @@
 import type { Alert, AlertSeverity } from "@/lib/types";
+import { formatAlertType } from "@/lib/format";
 
 const SEVERITY_STYLES: Record<AlertSeverity, string> = {
   critical: "text-red-400 bg-red-950/30 border-red-900/50",
@@ -32,7 +33,7 @@ function TelegramIcon() {
 export function AlertRow({ alert }: { alert: Alert }) {
   const style = SEVERITY_STYLES[alert.severity];
   const time = new Date(alert.timestamp).toLocaleString();
-  const label = alert.type.replace(/_/g, " ");
+  const label = formatAlertType(alert.type);
 
   return (
     <div className={`flex items-center justify-between rounded-md border px-4 py-3 ${style}`}>

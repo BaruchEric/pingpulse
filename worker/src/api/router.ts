@@ -9,6 +9,7 @@ import { speedtestRoutes } from "@/api/speedtest";
 import { exportRoutes } from "@/api/export";
 import { commandRoutes } from "@/api/command";
 import { syncRoutes } from "@/api/sync";
+import { connectivityRoutes } from "@/api/connectivity";
 import { analysisRoutes } from "@/api/analysis";
 import { telegramRoutes } from "@/api/telegram";
 import { deleteClientCascade } from "@/utils/client-db";
@@ -38,8 +39,9 @@ export function createRouter() {
     return c.json({ ok: true });
   });
 
-  // Client sync endpoint (authenticated with client secret, not admin JWT)
+  // Client sync endpoints (authenticated with client secret, not admin JWT)
   app.route("/api/clients", syncRoutes);
+  app.route("/api/clients", connectivityRoutes);
 
   // Protected routes — auth applied per-route-file via .use("*", authGuard)
   app.route("/api/clients", clientRoutes);

@@ -36,7 +36,8 @@ export function Alerts() {
   const { data: clientsData } = useClients(0);
   const [latencyThreshold, setLatencyThreshold] = useState("");
   const [lossThreshold, setLossThreshold] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [savingThresholds, setSavingThresholds] = useState(false);
+  const [savingReport, setSavingReport] = useState(false);
   const [notifMsg, setNotifMsg] = useState("");
   const [reportSchedule, setReportSchedule] = useState<string>("daily");
   const [reportTelegram, setReportTelegram] = useState(true);
@@ -72,7 +73,7 @@ export function Alerts() {
   }, [clientsData]);
 
   const handleSaveThresholds = async () => {
-    setSaving(true);
+    setSavingThresholds(true);
     try {
       await api.updateThresholds({
         ...(latencyThreshold ? { default_latency_threshold_ms: parseFloat(latencyThreshold) } : {}),
@@ -81,7 +82,7 @@ export function Alerts() {
       setLatencyThreshold("");
       setLossThreshold("");
     } finally {
-      setSaving(false);
+      setSavingThresholds(false);
     }
   };
 
@@ -151,10 +152,10 @@ export function Alerts() {
           </div>
           <button
             onClick={handleSaveThresholds}
-            disabled={saving || (!latencyThreshold && !lossThreshold)}
+            disabled={savingThresholds || (!latencyThreshold && !lossThreshold)}
             className="rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save"}
+            {savingThresholds ? "Saving..." : "Save"}
           </button>
           <button
             onClick={handleTestAlert}
@@ -258,7 +259,7 @@ export function Alerts() {
             onClick={async () => {
               const clients = clientsData?.clients;
               if (!clients?.length) return;
-              setSaving(true);
+              setSavingReport(true);
               try {
                 await Promise.all(
                   clients.map((c) =>
@@ -275,13 +276,13 @@ export function Alerts() {
                 );
                 setNotifMsg("Report settings saved");
               } finally {
-                setSaving(false);
+                setSavingReport(false);
               }
             }}
-            disabled={saving}
+            disabled={savingReport}
             className="rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save Report Settings"}
+            {savingReport ? "Saving..." : "Save Report Settings"}
           </button>
         </div>
       </div>

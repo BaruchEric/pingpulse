@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::Result;
 use rusqlite::Connection;
 use std::path::Path;
@@ -24,6 +22,14 @@ pub struct ProbeRecord {
     pub jitter_ms: Option<f64>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ConnectivityEvent {
+    pub id: i64,
+    pub event: String,  // "disconnected" | "connected"
+    pub timestamp: i64, // unix millis
+    pub reason: Option<String>,
+}
+
 impl ProbeStore {
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;
@@ -45,6 +51,13 @@ impl ProbeStore {
             CREATE TABLE IF NOT EXISTS sync_state (
                 key   TEXT PRIMARY KEY,
                 value TEXT
+            );
+            CREATE TABLE IF NOT EXISTS connectivity_events (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                event     TEXT    NOT NULL,
+                timestamp INTEGER NOT NULL,
+                reason    TEXT,
+                synced    INTEGER NOT NULL DEFAULT 0
             );",
         )?;
 
@@ -137,19 +150,64 @@ impl ProbeStore {
     }
 
     pub fn mark_synced(&self, seq_ids: &[i64]) -> Result<()> {
-        if seq_ids.is_empty() {
+        self.mark_batch_synced("probe_results", "seq_id", seq_ids)
+    }
+
+    pub fn insert_connectivity_event(
+        &self,
+        event: &str,
+        timestamp: i64,
+        reason: Option<&str>,
+    ) -> Result<i64> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("lock poisoned: {e}"))?;
+        conn.execute(
+            "INSERT INTO connectivity_events (event, timestamp, reason) VALUES (?1, ?2, ?3)",
+            rusqlite::params![event, timestamp, reason],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn get_unsynced_connectivity(&self, limit: usize) -> Result<Vec<ConnectivityEvent>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("lock poisoned: {e}"))?;
+        let mut stmt = conn.prepare(
+            "SELECT id, event, timestamp, reason FROM connectivity_events WHERE synced = 0 ORDER BY id LIMIT ?1",
+        )?;
+        #[allow(clippy::cast_possible_wrap)]
+        let rows = stmt.query_map([limit as i64], |row| {
+            Ok(ConnectivityEvent {
+                id: row.get(0)?,
+                event: row.get(1)?,
+                timestamp: row.get(2)?,
+                reason: row.get(3)?,
+            })
+        })?;
+        Ok(rows.filter_map(std::result::Result::ok).collect())
+    }
+
+    pub fn mark_connectivity_synced(&self, ids: &[i64]) -> Result<()> {
+        self.mark_batch_synced("connectivity_events", "id", ids)
+    }
+
+    fn mark_batch_synced(&self, table: &str, column: &str, ids: &[i64]) -> Result<()> {
+        if ids.is_empty() {
             return Ok(());
         }
         let conn = self
             .conn
             .lock()
             .map_err(|e| anyhow::anyhow!("lock poisoned: {e}"))?;
-        let placeholders: Vec<String> = seq_ids.iter().map(|_| "?".to_string()).collect();
+        let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
         let sql = format!(
-            "UPDATE probe_results SET synced = 1 WHERE seq_id IN ({})",
+            "UPDATE {table} SET synced = 1 WHERE {column} IN ({})",
             placeholders.join(",")
         );
-        let params: Vec<Box<dyn rusqlite::types::ToSql>> = seq_ids
+        let params: Vec<Box<dyn rusqlite::types::ToSql>> = ids
             .iter()
             .map(|id| Box::new(*id) as Box<dyn rusqlite::types::ToSql>)
             .collect();
