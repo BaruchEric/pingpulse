@@ -16,7 +16,8 @@
     "dev": "wrangler dev",
     "dev:dashboard": "cd dashboard && bun run dev",
     "build": "cd dashboard && bun run build && cd .. && wrangler deploy --dry-run",
-    "deploy": "cd dashboard && bun run build && cd .. && wrangler d1 migrations apply pingpulse-db --remote && wrangler deploy",
+    "sync-version": "VERSION=$(grep '^version' ../client/Cargo.toml | head -1 | sed 's/.*\"\\(.*\\)\"/\\1/') && sed -i '' \"s/LATEST_CLIENT_VERSION = \\\".*\\\"/LATEST_CLIENT_VERSION = \\\"$VERSION\\\"/\" wrangler.toml && echo \"Synced LATEST_CLIENT_VERSION = $VERSION\"",
+    "deploy": "bun run sync-version && cd dashboard && bun run build && cd .. && wrangler d1 migrations apply pingpulse-db --remote && wrangler deploy",
     "test": "vitest run",
     "lint": "eslint src/ && cd dashboard && eslint src/",
     "typecheck": "tsc --noEmit && cd dashboard && tsc --noEmit"
