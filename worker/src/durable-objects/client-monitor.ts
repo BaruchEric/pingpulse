@@ -394,10 +394,15 @@ export class ClientMonitor implements DurableObject {
     if (!this.disconnectedAt) {
       this.disconnectedAt = await this.state.storage.get<number>("disconnectedAt") ?? null;
     }
-    if (this.disconnectedAt && this.sessions.length === 0) {
+    if (this.disconnectedAt) {
       const gracePeriod = this.gracePeriodMs;
       const elapsed = Date.now() - this.disconnectedAt;
       if (elapsed >= gracePeriod) {
+        // Force-close any lingering WebSocket sessions whose TCP close
+        // handshake is hung (remote unreachable after network disconnect)
+        for (const ws of this.sessions) {
+          try { ws.close(1001, "Client down — dead connection"); } catch { /* already closing */ }
+        }
         await this.triggerAlert(
           "client_down",
           "critical",
