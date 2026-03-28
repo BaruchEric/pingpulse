@@ -693,12 +693,13 @@ export class ClientMonitor implements DurableObject {
   }
 
   private async handleReconnect(): Promise<void> {
-    if (this.currentOutageId) {
-      const now = new Date();
-      const duration = this.disconnectedAt
-        ? (now.getTime() - this.disconnectedAt) / 1000
-        : 0;
+    const now = new Date();
+    const duration = this.disconnectedAt
+      ? (now.getTime() - this.disconnectedAt) / 1000
+      : 0;
 
+    if (this.currentOutageId) {
+      // Grace period had expired — outage already recorded, just close it
       await this.env.DB.prepare(
         "UPDATE outages SET end_ts = ?, duration_s = ? WHERE id = ?"
       )
@@ -707,6 +708,22 @@ export class ClientMonitor implements DurableObject {
 
       await this.triggerAlert("client_up", "info", duration, 0);
       this.currentOutageId = null;
+    } else if (this.disconnectedAt) {
+      // Reconnected during grace period — record the brief outage and notify
+      const outageId = crypto.randomUUID();
+      await this.env.DB.prepare(
+        "INSERT INTO outages (id, client_id, start_ts, end_ts, duration_s) VALUES (?, ?, ?, ?, ?)"
+      )
+        .bind(
+          outageId,
+          this.clientId,
+          new Date(this.disconnectedAt).toISOString(),
+          now.toISOString(),
+          duration
+        )
+        .run();
+
+      await this.triggerAlert("client_up", "info", duration, 0);
     }
     this.disconnectedAt = null;
   }
