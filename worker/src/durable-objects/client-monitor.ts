@@ -32,7 +32,7 @@ interface PingInFlight {
 
 const PING_TIMEOUT_MS = 10_000;
 const LOSS_WINDOW_SIZE = 20;
-const MAX_CONSECUTIVE_TIMEOUTS = 3;
+const MAX_CONSECUTIVE_TIMEOUTS = 2;
 
 export class ClientMonitor implements DurableObject {
   private state: DurableObjectState;
@@ -161,6 +161,18 @@ export class ClientMonitor implements DurableObject {
             .run()
         : Promise.resolve(),
     ]);
+
+    // Auto-detect timezone from Cloudflare's geo data if not already set
+    if (this.config.timezone === "UTC" || !this.config.timezone) {
+      const cf = (request as unknown as { cf?: { timezone?: string } }).cf;
+      if (cf?.timezone) {
+        this.config.timezone = cf.timezone;
+        const merged = { ...this.config };
+        await this.env.DB.prepare(
+          "UPDATE clients SET config_json = ? WHERE id = ?"
+        ).bind(JSON.stringify(merged), this.clientId).run();
+      }
+    }
 
     // Set initial activity baseline for dead connection detection
     await this.state.storage.put("lastClientActivity", Date.now());

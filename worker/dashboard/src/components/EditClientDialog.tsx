@@ -77,6 +77,7 @@ export function EditClientDialog({
 }) {
   const [name, setName] = useState(client.name);
   const [location, setLocation] = useState(client.location);
+  const [timezone, setTimezone] = useState(client.config.timezone ?? "UTC");
   const [pingInterval, setPingInterval] = useState(String(client.config.ping_interval_s));
   const [speedTestInterval, setSpeedTestInterval] = useState(String(client.config.speed_test_interval_s ?? 300));
   const [latencyThreshold, setLatencyThreshold] = useState(String(client.config.alert_latency_threshold_ms));
@@ -133,6 +134,7 @@ export function EditClientDialog({
         name,
         location,
         config: {
+          timezone,
           ping_interval_s: parseInt(pingInterval),
           speed_test_interval_s: parseInt(speedTestInterval),
           alert_latency_threshold_ms: parseFloat(latencyThreshold),
@@ -193,6 +195,11 @@ export function EditClientDialog({
         <div>
           <label className={labelCls}>Location</label>
           <input value={location} onChange={(e) => setLocation(e.target.value)} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Timezone</label>
+          <input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="America/New_York" className={inputCls} />
+          <p className="mt-1 text-[10px] text-zinc-500">IANA timezone — auto-detected from client IP on connect</p>
         </div>
 
         <div className="space-y-4">

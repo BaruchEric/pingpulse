@@ -54,6 +54,9 @@ export interface ClientConfig {
   report_schedule: "daily" | "6h" | "weekly" | "off";
   report_channels: ("telegram" | "email")[];
 
+  // Client timezone (IANA, e.g. "America/New_York") — auto-detected on connect
+  timezone: string;
+
   // Per-alert-type Telegram notification sound
   telegram_notification_sound: Record<AlertType, "default" | "silent">;
   // Per-alert-type Telegram notification enabled/disabled
@@ -73,7 +76,8 @@ export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   retention_raw_days: 30,
   retention_aggregated_days: 90,
   retention_archive_to_r2: true,
-  down_alert_grace_seconds: 60,
+  timezone: "UTC",
+  down_alert_grace_seconds: 30,
   down_alert_channels: ["telegram"],
   down_alert_escalation_enabled: false,
   down_alert_escalate_after_seconds: 600,

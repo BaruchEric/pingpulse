@@ -28,18 +28,40 @@ const SEVERITY_EMOJI: Record<string, string> = {
   info: "\u{1F7E2}",
 };
 
+function formatLocalTime(isoTimestamp: string, timezone?: string): string {
+  try {
+    const tz = timezone && timezone !== "UTC" ? timezone : undefined;
+    if (!tz) return isoTimestamp;
+    const date = new Date(isoTimestamp);
+    return date.toLocaleString("en-US", {
+      timeZone: tz,
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return isoTimestamp;
+  }
+}
+
 function formatMessage(alert: AlertPayload): string {
   const emoji = SEVERITY_EMOJI[alert.severity] || "\u26AA";
   const clientLabel = alert.client_name
     ? `${alert.client_name} (${alert.client_id})`
     : alert.client_id;
+  const tz = alert.config?.timezone;
+  const timeStr = formatLocalTime(alert.timestamp, tz);
   const lines = [
     `${emoji} PingPulse Alert: ${alert.type.toUpperCase().replace(/_/g, " ")}`,
     `Severity: ${alert.severity.toUpperCase()}`,
     `Client: ${clientLabel}`,
     `Value: ${alert.value}`,
     `Threshold: ${alert.threshold}`,
-    `Time: ${alert.timestamp}`,
+    `Time: ${timeStr}`,
   ];
   if (alert.message) lines.push(`\n${alert.message}`);
   return lines.join("\n");

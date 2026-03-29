@@ -33,6 +33,9 @@ export interface ClientConfig {
   report_schedule?: "daily" | "6h" | "weekly" | "off";
   report_channels?: ("telegram" | "email")[];
 
+  // Client timezone (IANA, e.g. "America/New_York") — auto-detected on connect
+  timezone?: string;
+
   // Per-alert-type Telegram notification sound
   telegram_notification_sound?: Record<AlertType, "default" | "silent">;
   // Per-alert-type Telegram notification enabled/disabled
