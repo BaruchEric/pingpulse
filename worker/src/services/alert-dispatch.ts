@@ -48,22 +48,29 @@ function formatLocalTime(isoTimestamp: string, timezone?: string): string {
   }
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function formatMessage(alert: AlertPayload): string {
   const emoji = SEVERITY_EMOJI[alert.severity] || "\u26AA";
-  const clientLabel = alert.client_name
-    ? `${alert.client_name} (${alert.client_id})`
-    : alert.client_id;
+  const clientName = alert.client_name
+    ? escapeHtml(alert.client_name)
+    : null;
+  const clientLabel = clientName
+    ? `<b>${clientName}</b> (${escapeHtml(alert.client_id)})`
+    : escapeHtml(alert.client_id);
   const tz = alert.config?.timezone;
-  const timeStr = formatLocalTime(alert.timestamp, tz);
+  const timeStr = escapeHtml(formatLocalTime(alert.timestamp, tz));
   const lines = [
-    `${emoji} PingPulse Alert: ${alert.type.toUpperCase().replace(/_/g, " ")}`,
-    `Severity: ${alert.severity.toUpperCase()}`,
+    `${emoji} PingPulse Alert: ${escapeHtml(alert.type.toUpperCase().replace(/_/g, " "))}`,
+    `Severity: ${escapeHtml(alert.severity.toUpperCase())}`,
     `Client: ${clientLabel}`,
     `Value: ${alert.value}`,
     `Threshold: ${alert.threshold}`,
     `Time: ${timeStr}`,
   ];
-  if (alert.message) lines.push(`\n${alert.message}`);
+  if (alert.message) lines.push(`\n${escapeHtml(alert.message)}`);
   return lines.join("\n");
 }
 
@@ -99,7 +106,7 @@ export async function dispatchAlert(
         const isSilent = soundConfig[alert.type] === "silent";
 
         promises.push(
-          sendTelegramMessage(env, message, { silent: isSilent })
+          sendTelegramMessage(env, message, { silent: isSilent, parse_mode: "HTML" })
             .then((ok) => { result.telegram = ok; })
         );
       }
