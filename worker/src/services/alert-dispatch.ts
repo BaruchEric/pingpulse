@@ -57,18 +57,17 @@ function formatMessage(alert: AlertPayload): string {
   const clientName = alert.client_name
     ? escapeHtml(alert.client_name)
     : null;
-  const clientLabel = clientName
-    ? `<b>${clientName}</b> (${escapeHtml(alert.client_id)})`
-    : escapeHtml(alert.client_id);
+  const headerName = clientName
+    ? `「<b><u>${clientName}</u></b>」`
+    : `<code>${escapeHtml(alert.client_id)}</code>`;
   const tz = alert.config?.timezone;
   const timeStr = escapeHtml(formatLocalTime(alert.timestamp, tz));
   const lines = [
-    `${emoji} PingPulse Alert: ${escapeHtml(alert.type.toUpperCase().replace(/_/g, " "))}`,
-    `Severity: ${escapeHtml(alert.severity.toUpperCase())}`,
-    `Client: ${clientLabel}`,
-    `Value: ${alert.value}`,
-    `Threshold: ${alert.threshold}`,
-    `Time: ${timeStr}`,
+    `${emoji} ${headerName} — <b>${escapeHtml(alert.type.toUpperCase().replace(/_/g, " "))}</b>`,
+    ``,
+    `⚠️ Severity: ${escapeHtml(alert.severity.toUpperCase())}`,
+    `📊 Value: <b>${alert.value}</b> / ${alert.threshold}`,
+    `🕐 Time: ${timeStr}`,
   ];
   if (alert.message) lines.push(`\n${escapeHtml(alert.message)}`);
   return lines.join("\n");
