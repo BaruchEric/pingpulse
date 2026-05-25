@@ -371,6 +371,8 @@ export const ingestProbeResult = internalMutation({
 });
 
 const connectivityEventValidator = v.object({
+  // The client includes its local row id; accepted but unused server-side.
+  id: v.optional(v.number()),
   event: v.union(v.literal("disconnected"), v.literal("connected")),
   timestamp: v.number(),
   reason: v.optional(v.union(v.string(), v.null())),

@@ -279,14 +279,15 @@ const apiHandler = httpAction(async (ctx, request) => {
     const denied = await requireClientSecret(ctx, request, clientId);
     if (denied) return denied;
     const body = await request.json().catch(() => ({}));
+    // Coerce explicit JSON nulls to undefined so they satisfy v.optional(...).
     const res = await ctx.runMutation(internal.ingest.heartbeat, {
       clientId,
       rttMs: body.rtt_ms ?? null,
-      jitterMs: body.jitter_ms,
-      status: body.status,
-      clientVersion: body.client_version,
-      timezone: body.timezone,
-      includeLogs: body.include_logs,
+      jitterMs: body.jitter_ms ?? undefined,
+      status: body.status ?? undefined,
+      clientVersion: body.client_version ?? undefined,
+      timezone: body.timezone ?? undefined,
+      includeLogs: body.include_logs ?? undefined,
     });
     if ("deregistered" in res) return json({ error: "Client deleted" }, 410);
     if ("rejected" in res) return json({ error: "Admin disconnect in effect" }, 503);
@@ -618,12 +619,12 @@ for (const method of ["GET", "POST", "PUT", "DELETE", "OPTIONS"] as const) {
   http.route({ pathPrefix: "/api/", method, handler: apiHandler });
 }
 
-http.route({ path: "/speedtest/download", method: "GET", handler: speedtestDownload });
-http.route({ path: "/speedtest/upload", method: "POST", handler: speedtestUpload });
-http.route({
-  path: "/speedtest/download",
-  method: "OPTIONS",
-  handler: httpAction(async () => new Response(null, { status: 204, headers: CORS_HEADERS })),
-});
+// Speed-test payloads. Exact paths take priority over the "/api/" prefix
+// handler, so these win over the /api/speedtest/:id trigger route. Registered
+// under both /speedtest/* and /api/speedtest/* — the client uses the latter.
+for (const prefix of ["/speedtest", "/api/speedtest"]) {
+  http.route({ path: `${prefix}/download`, method: "GET", handler: speedtestDownload });
+  http.route({ path: `${prefix}/upload`, method: "POST", handler: speedtestUpload });
+}
 
 export default http;
