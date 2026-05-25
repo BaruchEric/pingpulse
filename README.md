@@ -1,20 +1,21 @@
 # PingPulse
 
-Network monitoring system that tracks latency, packet loss, and throughput across distributed endpoints. Combines a Rust client daemon with a Cloudflare Workers backend and React dashboard.
+Network monitoring system that tracks latency, packet loss, and throughput across distributed endpoints. Combines a Rust client daemon with a Convex backend and React dashboard.
 
 ## Architecture
 
 ```
-+------------------+        WebSocket         +---------------------------+
-|  Rust Client     | -----------------------> |  Cloudflare Worker        |
-|  (daemon on      |  pings, speed tests,     |  (Hono + Durable Objects) |
-|   target machine)|  heartbeats              |                           |
-+------------------+                          |  D1 (SQLite) for data     |
-                                              |  R2 for archives          |
-                                              |  Analytics Engine         |
++------------------+      HTTP heartbeat      +---------------------------+
+|  Rust Client     | -----------------------> |  Convex backend           |
+|  (daemon on      |  RTT, probes,            |  (queries/mutations/      |
+|   target machine)|  speed tests             |   actions + HTTP router)  |
++------------------+  <-----------------------|                           |
+                      config + queued commands|  Convex tables for data   |
+                                              |  crons: down detection,   |
+                                              |  retention, health reports|
                                               +---------------------------+
-                                                        |
-                                                        | serves
+                                                        ^
+                                                        | REST over HTTPS
                                                         v
                                               +---------------------------+
                                               |  React Dashboard          |
@@ -23,20 +24,20 @@ Network monitoring system that tracks latency, packet loss, and throughput acros
 ```
 
 **Three-tier system:**
-1. **Rust Client Daemon** -- Runs on target machines as a system service (launchd/systemd/Windows Service). Connects via WebSocket to backend. Performs pings and speed tests.
-2. **Cloudflare Workers + Durable Objects** -- One `ClientMonitor` Durable Object per registered client. Stores metrics in D1, archives old data to R2, sends alerts via email (Resend) and Telegram.
-3. **React Dashboard** -- SPA served by the Worker. JWT-based admin auth. Displays metrics, manages clients, configures alerts.
+1. **Rust Client Daemon** -- Runs on target machines as a system service (launchd/systemd/Windows Service). POSTs an HTTP heartbeat every ping interval, reporting measured RTT and pulling config + queued admin commands in the response. Performs ICMP/HTTP probes and speed tests.
+2. **Convex backend** -- Queries/mutations/actions plus an HTTP router (`convex/http.ts`) that exposes a REST API at `https://<deployment>.convex.site`. Stores metrics in Convex tables. Crons handle down/up detection, retention, and scheduled health reports; alert delivery (email via Resend, Telegram) runs in scheduled actions.
+3. **React Dashboard** -- Standalone SPA. Bearer-JWT admin auth. Displays metrics, manages clients, configures alerts.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Client | Rust, Tokio, tokio-tungstenite (WebSocket), reqwest, clap, axum (local agent API) |
-| Backend | Cloudflare Workers, Hono, Durable Objects, D1 (SQLite), R2, Analytics Engine |
+| Client | Rust, Tokio, reqwest (HTTP), clap, axum (local agent API) |
+| Backend | Convex (TypeScript functions, document DB, HTTP actions, crons, scheduler) |
 | Dashboard | React 19, React Router 7, Vite 8, Tailwind CSS 4, uPlot |
 | Alerts | Resend (email), Telegram Bot API |
-| CI/CD | GitHub Actions, Bun, Wrangler |
-| Builds | Bun (worker/dashboard), Cargo (client) |
+| CI/CD | GitHub Actions, Bun, Convex CLI |
+| Builds | Bun (convex/dashboard), Cargo (client) |
 
 ## Repository Structure
 
@@ -45,57 +46,48 @@ pingpulse/
 +-- client/                     # Rust client daemon
 |   +-- src/
 |   |   +-- main.rs             # CLI entry point (register, start, stop, status, uninstall, agent)
-|   |   +-- websocket.rs        # WebSocket event loop, self-update, reconnect
-|   |   +-- speed_test.rs       # Download/upload speed test logic
+|   |   +-- heartbeat.rs        # HTTP heartbeat loop, command dispatch, self-update
+|   |   +-- speed_test.rs       # Download/upload speed test logic + result reporting
 |   |   +-- agent.rs            # Local HTTP management API (port 9111)
 |   |   +-- service.rs          # OS service install (launchd/systemd/Windows)
 |   |   +-- config.rs           # Config file management
-|   |   +-- register.rs         # Token-based registration
-|   |   +-- messages.rs         # WebSocket message types (incoming/outgoing)
+|   |   +-- messages.rs         # Heartbeat request/response + command types
 |   |   +-- store.rs            # SQLite probe storage + sync + connectivity events
 |   |   +-- sync.rs             # Batch sync of probe results + connectivity events to server
 |   |   +-- probe.rs            # ICMP and HTTP probe engine
-|   |   +-- logging.rs          # Structured logging
+|   |   +-- logger.rs           # Structured logging
 |   +-- Cargo.toml
 |
-+-- worker/                     # Cloudflare Worker backend
++-- convex/                     # Convex backend
+|   +-- schema.ts               # Tables (clients, pingResults, speedTests, outages, alerts, ...)
+|   +-- http.ts                 # HTTP router — REST API at /api/* and speed-test payloads
+|   +-- auth.ts                 # Admin login/bootstrap + client registration
+|   +-- clients.ts              # Client CRUD, stats, cascade delete, retention purge
+|   +-- ingest.ts               # heartbeat, probe sync, speed-test result, connectivity
+|   +-- commands.ts             # Admin command enqueue + client status
+|   +-- metrics.ts              # Metrics, logs, probes, sync-status, export queries
+|   +-- analysis.ts             # Deep-analysis aggregations
+|   +-- alerts.ts               # Alert trigger/dedup, listing, thresholds
+|   +-- alertDispatch.ts        # Email (Resend) + Telegram delivery (scheduled action)
+|   +-- monitor.ts              # Down/up detection (30s cron)
+|   +-- maintenance.ts          # Speed-test fan-out, retention, health reports (6h cron)
+|   +-- telegram.ts             # Telegram bot webhook + commands
+|   +-- crons.ts                # Cron definitions
+|   +-- _generated/             # Committed codegen (regenerate with `npx convex dev`)
+|
++-- dashboard/                  # React SPA
 |   +-- src/
-|   |   +-- index.ts            # Worker entry point (Hono app)
-|   |   +-- api/
-|   |   |   +-- auth.ts         # Login/logout/session endpoints
-|   |   |   +-- clients.ts      # Client CRUD + config management
-|   |   |   +-- metrics.ts      # Historical metrics queries
-|   |   |   +-- alerts.ts       # Alert thresholds + listing
-|   |   |   +-- speedtest.ts    # On-demand speed test triggers + payload endpoints
-|   |   |   +-- export.ts       # CSV/JSON export from R2
-|   |   |   +-- connectivity.ts # Client-reported connectivity events (outage backfill)
-|   |   |   +-- command.ts      # Send commands to Durable Objects
-|   |   +-- durable-objects/
-|   |   |   +-- client-monitor.ts   # Per-client Durable Object (pings, state machine)
-|   |   +-- services/
-|   |   |   +-- alert-dispatch.ts   # Email (Resend) + Telegram alert delivery
-|   |   |   +-- archiver.ts        # D1 -> R2 data archival
-|   |   +-- middleware/
-|   |   |   +-- auth.ts            # JWT verification middleware
-|   |   |   +-- rate-limit.ts      # Per-IP rate limiting
-|   |   +-- utils/
-|   +-- dashboard/              # React SPA
-|   |   +-- src/
-|   |   |   +-- pages/          # Login, Overview, ClientDetail, Clients, Alerts, Settings
-|   |   |   +-- components/     # ClientCard, LatencyChart, ThroughputChart, etc.
-|   |   |   +-- lib/            # API client, auth helpers, formatters
-|   |   +-- package.json
-|   +-- migrations/
-|   |   +-- 0001_initial.sql
-|   |   +-- 0002_add_client_version.sql
-|   +-- wrangler.toml
+|   |   +-- pages/              # Login, Overview, ClientDetail, Clients, Alerts, Settings
+|   |   +-- components/         # ClientCard, LatencyChart, ThroughputChart, etc.
+|   |   +-- lib/                # API client (VITE_API_URL + Bearer token), hooks, formatters
 |   +-- package.json
 |
++-- package.json                # Convex deps + repo scripts (typecheck/lint/deploy)
 +-- docs/                       # Design specs and implementation plans
 +-- install.sh                  # One-liner install script (macOS/Linux)
 +-- install.ps1                 # One-liner install script (Windows)
 +-- .github/workflows/
-    +-- deploy-worker.yml       # Auto-deploy worker on push to master
+    +-- deploy-convex.yml       # Auto-deploy Convex + dashboard build on push to master
     +-- release-client.yml      # Auto-build + release client binaries
 ```
 
@@ -107,109 +99,50 @@ Complete guide to deploying PingPulse for a new organization from scratch.
 
 ## Prerequisites
 
-- **Cloudflare account** (free plan works; paid plan needed only for higher limits)
+- **Convex account** (free plan works) — sign up at [convex.dev](https://convex.dev)
 - **GitHub repository** (fork or clone of this repo)
-- **Domain** pointed to Cloudflare (or use a workers.dev subdomain)
+- **A static host** for the dashboard SPA (Netlify, Vercel, Cloudflare Pages, etc.)
 - **Bun** installed locally: `curl -fsSL https://bun.sh/install | bash`
 - **Rust toolchain** (only if building client locally): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-- **Wrangler CLI**: `bun install -g wrangler`
 
-## Step 1: Cloudflare Resources
-
-Login to Wrangler and create the required resources:
+## Step 1: Create the Convex Project
 
 ```bash
-# Authenticate with Cloudflare
-wrangler login
+# From the repo root — installs the convex dependency
+bun install
 
-# Create D1 database
-wrangler d1 create pingpulse-db
-# Note the database_id from output
-
-# Create R2 bucket
-wrangler r2 bucket create pingpulse-archive
-
-# Create Analytics Engine dataset (via Cloudflare dashboard)
-# Go to: Workers & Pages > Analytics Engine > Create dataset named "pingpulse-metrics"
+# Configure a Convex project and push the schema + functions.
+# This is interactive the first time (login + project selection) and
+# generates convex/_generated/.
+npx convex dev --once
 ```
 
-## Step 2: Configure wrangler.toml
+Note your deployment's HTTP actions URL — it looks like
+`https://<deployment-name>.convex.site`. The dashboard and clients call this URL.
 
-Edit `worker/wrangler.toml` with your values:
-
-```toml
-name = "pingpulse"
-main = "src/index.ts"
-compatibility_date = "2025-12-01"
-compatibility_flags = ["nodejs_compat"]
-
-[[d1_databases]]
-binding = "DB"
-database_name = "pingpulse-db"
-database_id = "YOUR_DATABASE_ID_HERE"         # <-- from Step 1
-
-[[r2_buckets]]
-binding = "ARCHIVE"
-bucket_name = "pingpulse-archive"
-
-[[analytics_engine_datasets]]
-binding = "METRICS"
-dataset = "pingpulse-metrics"
-
-[durable_objects]
-bindings = [
-  { name = "CLIENT_MONITOR", class_name = "ClientMonitor" }
-]
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["ClientMonitor"]
-
-# Option A: Custom domain (requires domain on Cloudflare)
-[[routes]]
-pattern = "ping.yourdomain.com"
-custom_domain = true
-
-# Option B: Use workers.dev subdomain instead (remove the [[routes]] block above)
-# Your app will be at: https://pingpulse.YOUR_SUBDOMAIN.workers.dev
-
-[triggers]
-crons = ["0 */6 * * *"]        # Speed tests + archival every 6 hours
-
-[assets]
-directory = "./dashboard/dist"
-not_found_handling = "single-page-application"
-
-[vars]
-LATEST_CLIENT_VERSION = "1.0.0"
-```
-
-## Step 3: Set Secrets
+## Step 2: Set Environment Variables
 
 ```bash
-cd worker
-
 # Required: JWT signing secret (generate a strong random string)
-echo "YOUR_RANDOM_SECRET_HERE" | wrangler secret put ADMIN_JWT_SECRET
+npx convex env set ADMIN_JWT_SECRET "$(openssl rand -base64 32)"
+
+# The latest client version (drives the dashboard "update available" prompt)
+npx convex env set LATEST_CLIENT_VERSION "1.0.5"
 
 # Optional: Email alerts via Resend (https://resend.com)
-echo "re_YOUR_KEY" | wrangler secret put RESEND_API_KEY
-echo "PingPulse <alerts@yourdomain.com>" | wrangler secret put ALERT_FROM_EMAIL
-echo "admin@yourdomain.com" | wrangler secret put ALERT_TO_EMAIL
+npx convex env set RESEND_API_KEY "re_YOUR_KEY"
+npx convex env set ALERT_FROM_EMAIL "PingPulse <alerts@yourdomain.com>"
+npx convex env set ALERT_TO_EMAIL "admin@yourdomain.com"
 
 # Optional: Telegram alerts
-echo "YOUR_BOT_TOKEN" | wrangler secret put TELEGRAM_BOT_TOKEN
-echo "YOUR_CHAT_ID" | wrangler secret put TELEGRAM_CHAT_ID
-```
-
-**Generating a JWT secret:**
-```bash
-openssl rand -base64 32
+npx convex env set TELEGRAM_BOT_TOKEN "YOUR_BOT_TOKEN"
+npx convex env set TELEGRAM_CHAT_ID "YOUR_CHAT_ID"
 ```
 
 **Setting up Telegram alerts (automated):**
 ```bash
-# Run the setup script — it handles token validation, chat ID discovery, and secret configuration
+# Run the setup script — it handles token validation, chat ID discovery,
+# and sets TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID as Convex env vars.
 ./setup-telegram.sh
 ```
 
@@ -217,66 +150,55 @@ The script will:
 1. Ask you to paste your bot token (get one from [@BotFather](https://t.me/BotFather) — send `/newbot`)
 2. Validate the token against Telegram's API
 3. Wait for you to message the bot, then auto-discover your chat ID
-4. Set both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as Wrangler secrets
+4. Set both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as Convex env vars
 5. Send a confirmation message to your Telegram
 
-## Step 4: Run Database Migrations
+Then register the bot webhook (after deploying) with an authenticated
+`POST /api/telegram/setup`.
+
+## Step 3: Deploy the Backend
 
 ```bash
-cd worker
-
-# Apply migrations to production D1
-wrangler d1 execute pingpulse-db --remote --file=migrations/0001_initial.sql
-wrangler d1 execute pingpulse-db --remote --file=migrations/0002_add_client_version.sql
+# Deploys schema, functions, and crons to your production deployment
+npx convex deploy
 ```
 
-## Step 5: Set Admin Password
+The schema is declarative — Convex creates the tables on deploy. No SQL migrations.
 
-The first time you visit the dashboard login page, you'll be prompted to set an admin password. Alternatively, you can set it via D1 directly:
+## Step 4: Set the Admin Password
+
+The admin password is set once via the bootstrap endpoint (it only works while no
+admin exists):
 
 ```bash
-# Generate a bcrypt hash of your password, then insert:
-wrangler d1 execute pingpulse-db --remote --command \
-  "INSERT INTO admin (id, password_hash, created_at) VALUES (1, 'YOUR_BCRYPT_HASH', datetime('now'))"
+curl -X POST https://<deployment-name>.convex.site/api/auth/bootstrap \
+  -H "Content-Type: application/json" \
+  -d '{"password":"YOUR_ADMIN_PASSWORD"}'
 ```
 
-Or just deploy and use the dashboard -- it handles first-time setup automatically.
-
-## Step 6: Deploy
+## Step 5: Build and Host the Dashboard
 
 ```bash
-cd worker
-
-# Install dependencies
+cd dashboard
 bun install
-cd dashboard && bun install && cd ..
 
-# Build dashboard and deploy
-bun run deploy
+# Point the dashboard at your Convex HTTP actions URL
+echo 'VITE_API_URL=https://<deployment-name>.convex.site' > .env.local
+
+bun run build          # outputs dashboard/dist/
+# Deploy dist/ to your static host (Netlify/Vercel/Cloudflare Pages/...)
 ```
 
-Your dashboard is now live at your configured domain or `https://pingpulse.YOUR_SUBDOMAIN.workers.dev`.
+## Step 6: Set Up CI/CD (GitHub Actions)
 
-## Step 7: Set Up CI/CD (GitHub Actions)
-
-Add these secrets to your GitHub repository (Settings > Secrets > Actions):
+Add this secret to your GitHub repository (Settings > Secrets > Actions):
 
 | Secret | Value |
 |--------|-------|
-| `CLOUDFLARE_API_TOKEN` | API token with Workers/D1/R2 permissions |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID |
-
-**Creating the Cloudflare API Token:**
-1. Go to [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)
-2. Create token with permissions:
-   - **Account** > Workers Scripts > Edit
-   - **Account** > Workers KV Storage > Edit
-   - **Account** > Workers R2 Storage > Edit
-   - **Account** > D1 > Edit
-   - **Account** > Account Analytics > Edit
+| `CONVEX_DEPLOY_KEY` | Production deploy key from the Convex dashboard (Settings > Deploy keys) |
 
 Once configured, the CI/CD workflows handle everything automatically:
-- **Worker deploys** on push to `master` when `worker/**` files change
+- **Convex deploys** on push to `master` when `convex/**` or `dashboard/**` files change
 - **Client releases** on push to `master` when `client/**` files change (builds cross-platform binaries and creates GitHub releases)
 
 ---
@@ -348,11 +270,11 @@ pingpulse agent       # Start local management API on port 9111
 
 ## Self-Update
 
-Clients support unattended over-the-air updates triggered from the dashboard. When a newer `LATEST_CLIENT_VERSION` is set in `wrangler.toml` and deployed, the dashboard shows an "Update to X.Y.Z" button next to outdated clients.
+Clients support unattended over-the-air updates triggered from the dashboard. When a newer `LATEST_CLIENT_VERSION` is set as a Convex env var (`npx convex env set LATEST_CLIENT_VERSION X.Y.Z`), the dashboard shows an "Update to X.Y.Z" button next to outdated clients.
 
 **How it works:**
 1. Admin clicks "Update" in the dashboard
-2. Server sends a `self_update` WebSocket message with the target version and GitHub repo
+2. Server queues a `self_update` command; the client pulls it on its next heartbeat (with the target version and GitHub repo)
 3. Client downloads the correct platform binary from GitHub Releases (`client-v{version}`)
 4. Client extracts, ad-hoc code-signs (macOS), and replaces its own binary
 5. Client restarts via `launchctl kickstart` (macOS), `systemctl restart` (Linux), or process respawn (Windows)
@@ -376,7 +298,7 @@ name = "Office Router"
 location = "NYC Office"
 ```
 
-Configuration is pushed from the dashboard via WebSocket. Configurable parameters:
+Configuration is edited in the dashboard and delivered to the client in its heartbeat response. Configurable parameters:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -495,7 +417,7 @@ Trigger an on-demand speed test for a client. Rate limited: 1 per client per 5 m
 ## Data Export
 
 ### GET /api/export/:id?format=csv|json&from=ISO&to=ISO
-Export historical data from R2 archive.
+Export historical ping/speed-test data. Admin token may be passed as `?token=` for direct download links.
 
 ## Speed Test Payload Endpoints (Client-Facing)
 
@@ -505,25 +427,27 @@ Download test payload for speed measurement.
 ### POST /speedtest/upload
 Upload test payload for speed measurement.
 
-## WebSocket
+## Client Heartbeat (replaces the former WebSocket)
 
-### /ws/:clientId
-Client daemon connection. Requires `Authorization: Bearer <client_secret>` header.
+### POST /api/clients/:id/heartbeat
+Client daemon poll. Requires `Authorization: Bearer <client_secret>`. Sent every ping interval.
 
-Messages from server:
-- `config_update` -- Updated client configuration
-- `ping` -- Ping request (client measures RTT and responds)
-- `start_speed_test` -- Server requests a speed test
-- `self_update` -- Trigger unattended client binary update (version, repo)
-- `deregistered` -- Client has been deleted by admin
-- `server_logs` -- Server-side log entries pushed to client
+Request body: `{ rtt_ms, jitter_ms, status, client_version, timezone, include_logs }` — the
+round-trip latency the client measured for the *previous* heartbeat.
 
-Messages from client:
-- `pong` -- Ping response with RTT measurement
-- `ping` -- Client-initiated ping
-- `speed_test_result` -- Speed test results (download/upload Mbps)
-- `probe_result` -- ICMP/HTTP probe measurement
-- `error` -- Error message
+Response body:
+- `config` -- current client configuration
+- `paused` / `simulation` -- server-applied monitoring state
+- `latest_version` -- newest available client version (drives the update prompt)
+- `commands` -- queued admin commands to run: `speed_test`, `self_update`, `request_ping`, `deregister`
+- `server_logs` -- recent server-side log entries (when `include_logs` is set)
+
+Status `410` means the client was deleted (the daemon self-uninstalls); `503` means an
+admin-disconnect window is in effect.
+
+Other client-authenticated endpoints: `POST /api/clients/:id/sync` (probe batches),
+`POST /api/clients/:id/connectivity` (outage backfill),
+`POST /api/clients/:id/speedtest-result`, `DELETE /api/clients/:id/self`.
 
 ## Rate Limits
 
@@ -560,13 +484,12 @@ Both channels are optional. Configure one, both, or neither.
 
 # Data Retention
 
-| Storage | Retention | Data |
-|---------|-----------|------|
-| D1 (SQLite) | 30 days | Ping results, speed tests, outages, alerts |
-| Analytics Engine | 90 days | Aggregated metrics |
-| R2 (Object Storage) | Unlimited | Archived raw data (CSV/JSON export) |
+| Data | Retention | Notes |
+|------|-----------|-------|
+| Ping results, probe results | `retention_raw_days` (default 30) | Purged per client by the 6h maintenance cron |
+| Speed tests, outages, alerts | Kept | Retained in Convex tables |
 
-Archival runs automatically every 6 hours via the cron trigger.
+Retention runs automatically every 6 hours via the Convex cron (`convex/maintenance.ts`).
 
 ---
 
@@ -589,24 +512,28 @@ Archival runs automatically every 6 hours via the cron trigger.
 
 # Local Development
 
-## Worker
+## Backend (Convex)
 
 ```bash
-cd worker
-
-# Install dependencies
+# Install deps (repo root)
 bun install
-cd dashboard && bun install && cd ..
 
-# Start local dev server (with D1 local database)
-bun run dev
-
-# In a separate terminal, start dashboard dev server with HMR
-bun run dev:dashboard
+# Start the Convex dev deployment — watches convex/, pushes changes,
+# and regenerates convex/_generated/. Prints your .convex.site URL.
+npx convex dev
 ```
 
-The worker dev server runs at `http://localhost:8787`.
-The dashboard dev server runs at `http://localhost:5173` (proxies API calls to worker).
+## Dashboard
+
+```bash
+cd dashboard
+bun install
+
+# Point at your Convex dev deployment's HTTP actions URL
+echo 'VITE_API_URL=https://<deployment-name>.convex.site' > .env.local
+
+bun run dev          # Vite dev server with HMR (http://localhost:5173)
+```
 
 ## Client
 
@@ -623,11 +550,12 @@ cargo run -- start --foreground
 cargo test
 ```
 
-## Worker Tests
+## Checks
 
 ```bash
-cd worker
-bun run test
+bun run typecheck    # tsc for convex/ + dashboard
+bun run lint         # eslint for convex/ + dashboard
+cd client && cargo test
 ```
 
 ---
@@ -642,8 +570,8 @@ bun run test
 
 ## Client shows as offline in dashboard
 - Check client is running: `pingpulse status`
-- WebSocket may have disconnected -- client auto-reconnects with exponential backoff and syncs connectivity events + buffered probes on reconnect
-- Check the server logs: `wrangler tail` (live logs from Worker)
+- Heartbeats may be failing -- the client retries every ping interval and syncs connectivity events + buffered probes once heartbeats succeed again
+- Check the server logs: `npx convex logs` (live function logs)
 
 ## Alerts not delivering
 - Test with `POST /api/alerts/test`
@@ -663,9 +591,10 @@ bun run test
 - Adjust `full_test_payload_bytes` and `probe_size_bytes` in dashboard client config
 
 ## Dashboard login issues
-- JWT cookie requires HTTPS in production (HTTP works on localhost)
-- Clear browser cookies and try again
-- Check `ADMIN_JWT_SECRET` is set as a Wrangler secret
+- The admin token is stored in `localStorage` and sent as `Authorization: Bearer`
+- Clear `localStorage` and try again
+- Check `ADMIN_JWT_SECRET` is set as a Convex env var, and `VITE_API_URL` points at your `.convex.site` URL
+- Ensure the admin password was bootstrapped (`POST /api/auth/bootstrap`)
 
 ---
 
@@ -675,144 +604,138 @@ Instructions for AI coding agents (Claude Code, Cursor, Copilot, etc.) working o
 
 ## Project Context
 
-PingPulse is a network monitoring tool. The codebase has two main parts:
+PingPulse is a network monitoring tool. The codebase has three main parts:
 - **`/client`** -- Rust binary (Cargo project)
-- **`/worker`** -- Cloudflare Worker (TypeScript + Hono) with an embedded React dashboard
+- **`/convex`** -- Convex backend (TypeScript functions + HTTP router)
+- **`/dashboard`** -- Vite + React SPA
 
 ## Getting Started for AI Agents
 
 ### 1. Understand the Architecture
-- Backend is a **Cloudflare Worker** using **Hono** framework, NOT Express/Next.js/Node.js
-- Database is **Cloudflare D1** (SQLite), NOT Postgres/MySQL
-- Real-time communication uses **WebSocket** via Durable Objects
-- Dashboard is a **Vite + React SPA**, NOT Next.js
+- Backend is **Convex** (queries/mutations/actions + an HTTP router), NOT Express/Next.js/Cloudflare Workers
+- Database is the **Convex document store** (declarative schema in `convex/schema.ts`), NOT SQL
+- There is **no WebSocket**. The client polls `POST /api/clients/:id/heartbeat`; admin commands are queued and pulled in the response
+- Dashboard is a **standalone Vite + React SPA** that calls the API over HTTP (`VITE_API_URL`)
 - Client is a **Rust binary**, NOT Node.js
 
 ### 2. Key Files to Read First
 ```
-worker/src/index.ts                    # All routes and middleware setup
-worker/src/durable-objects/client-monitor.ts  # Core monitoring logic
-worker/src/api/*.ts                    # API endpoint handlers
-worker/dashboard/src/pages/*.tsx       # Dashboard pages
-worker/dashboard/src/components/*.tsx  # Reusable UI components
-client/src/main.rs                     # Client CLI and subcommands
-client/src/websocket.rs                # WebSocket event loop, self-update, reconnect
+convex/schema.ts            # Tables and validators
+convex/http.ts              # HTTP router — the REST API surface
+convex/ingest.ts            # heartbeat + ingestion mutations
+convex/clients.ts           # client CRUD/queries
+convex/monitor.ts           # down/up detection cron
+convex/maintenance.ts       # retention + health-report cron
+dashboard/src/lib/api.ts    # Dashboard API client (base URL + Bearer token)
+dashboard/src/pages/*.tsx   # Dashboard pages
+client/src/main.rs          # Client CLI and subcommands
+client/src/heartbeat.rs     # HTTP heartbeat loop, command dispatch, self-update
 ```
 
 ### 3. Development Commands
 ```bash
-# Worker development
-cd worker
-bun install                            # Install deps
-bun run dev                            # Start worker locally (port 8787)
-bun run dev:dashboard                  # Start dashboard with HMR (port 5173)
-bun run test                           # Run worker tests
-bun run deploy                         # Build dashboard + deploy to Cloudflare
+# Backend (repo root)
+bun install
+npx convex dev                         # Push functions, codegen, watch
+npx convex deploy                      # Deploy to production
+bun run typecheck                      # tsc for convex/ + dashboard
+bun run lint                           # eslint for convex/ + dashboard
 
-# Client development
+# Dashboard
+cd dashboard && bun install && bun run dev   # Vite HMR (port 5173)
+
+# Client
 cd client
-cargo build                            # Build client
-cargo test                             # Run client tests
-cargo run -- start --foreground        # Run client in foreground
+cargo build
+cargo test
+cargo run -- start --foreground
 ```
 
 ### 4. Important Patterns
 
-**Hono Route Handlers (Worker)**
+**Convex functions**
 ```typescript
-// All routes are in worker/src/api/*.ts
-// They receive Hono context with D1, R2, Durable Object bindings:
-app.get('/api/clients', authMiddleware, async (c) => {
-  const db = c.env.DB;  // D1 database
-  const results = await db.prepare('SELECT * FROM clients').all();
-  return c.json(results);
+// Queries/mutations/actions are registered with the generated builders.
+export const listClients = internalQuery({
+  args: {},
+  handler: async (ctx) => ctx.db.query("clients").collect(),
 });
 ```
 
-**Durable Object Communication**
-```typescript
-// To send a command to a specific client's Durable Object:
-const id = c.env.CLIENT_MONITOR.idFromName(clientId);
-const stub = c.env.CLIENT_MONITOR.get(id);
-await stub.fetch(new Request('http://internal/trigger-speed-test'));
-```
+**HTTP routing** — `convex/http.ts` registers a single handler per method under the
+`/api/` prefix and dispatches by parsing `url.pathname`. It authenticates (admin Bearer
+JWT or per-client secret), then calls internal queries/mutations/actions via
+`ctx.runQuery` / `ctx.runMutation` / `ctx.runAction`.
 
-**Dashboard API Calls**
-```typescript
-// Dashboard uses fetch() with credentials: 'include' for JWT cookies
-const res = await fetch('/api/clients', { credentials: 'include' });
-```
+**Admin commands** — enqueued with `internal.commands.enqueue` (state-style commands
+mutate the client doc; action-style commands insert into the `commands` table) and pulled
+by the client in its heartbeat response.
+
+**Dashboard API calls** — go through `dashboard/src/lib/api.ts`, which prefixes
+`VITE_API_URL` and attaches `Authorization: Bearer <token>` from `localStorage`.
 
 ### 5. Common Tasks
 
 **Adding a new API endpoint:**
-1. Create or edit a file in `worker/src/api/`
-2. Register the route in `worker/src/index.ts`
-3. Add auth middleware if needed: `authMiddleware` from `worker/src/middleware/auth.ts`
+1. Add the query/mutation/action to the relevant `convex/*.ts` module
+2. Add a route branch in `convex/http.ts` (match the path/method, auth, then `ctx.run*`)
+3. Add a method to `dashboard/src/lib/api.ts` if the dashboard needs it
 
 **Adding a new dashboard page:**
-1. Create page component in `worker/dashboard/src/pages/`
-2. Add route in `worker/dashboard/src/App.tsx`
+1. Create page component in `dashboard/src/pages/`
+2. Add route in `dashboard/src/App.tsx`
 3. Add nav link in the layout component
 
 **Modifying client behavior:**
 1. Edit relevant Rust source in `client/src/`
 2. If adding a new config field, update:
-   - `worker/src/durable-objects/client-monitor.ts` (server sends config)
-   - `client/src/config.rs` (client reads config)
-   - `worker/dashboard/src/components/EditClientDialog.tsx` (UI to edit)
+   - `convex/schema.ts` (`clientConfigValidator`) and `convex/lib/config.ts` (`DEFAULT_CLIENT_CONFIG`, `ALLOWED_CONFIG_KEYS`)
+   - `client/src/config.rs` (`RemoteConfig` + `apply_remote`)
+   - `dashboard/src/components/EditClientDialog.tsx` (UI to edit)
 
-**Adding a new database table/column:**
-1. Create new migration file: `worker/migrations/NNNN_description.sql`
-2. Apply locally: `wrangler d1 execute pingpulse-db --local --file=migrations/NNNN_description.sql`
-3. Apply to production: `wrangler d1 execute pingpulse-db --remote --file=migrations/NNNN_description.sql`
+**Adding a new table/column:**
+1. Edit `convex/schema.ts` (Convex applies it on push — no SQL migrations)
+2. Run `npx convex dev` to push and regenerate `convex/_generated/`
 
-### 6. Environment & Bindings
+### 6. Environment Variables
 
-The Worker has these Cloudflare bindings available on `c.env`:
+Set with `npx convex env set NAME value`:
 
-| Binding | Type | Usage |
-|---------|------|-------|
-| `DB` | D1 Database | SQLite queries |
-| `ARCHIVE` | R2 Bucket | Data archival and export |
-| `METRICS` | Analytics Engine | Time-series aggregation |
-| `CLIENT_MONITOR` | Durable Object Namespace | Per-client monitoring state |
-| `ADMIN_JWT_SECRET` | Secret | JWT signing key |
-| `RESEND_API_KEY` | Secret | Email alert delivery |
-| `ALERT_FROM_EMAIL` | Variable | Alert sender address |
-| `ALERT_TO_EMAIL` | Variable | Alert recipient address |
-| `TELEGRAM_BOT_TOKEN` | Secret | Telegram alert delivery |
-| `TELEGRAM_CHAT_ID` | Variable | Telegram chat for alerts |
-| `LATEST_CLIENT_VERSION` | Variable | For client update notifications |
+| Variable | Usage |
+|----------|-------|
+| `ADMIN_JWT_SECRET` | Admin JWT signing key (required) |
+| `LATEST_CLIENT_VERSION` | Drives client update notifications (required) |
+| `RESEND_API_KEY` | Email alert delivery |
+| `ALERT_FROM_EMAIL` | Alert sender address |
+| `ALERT_TO_EMAIL` | Alert recipient address |
+| `TELEGRAM_BOT_TOKEN` | Telegram alert delivery |
+| `TELEGRAM_CHAT_ID` | Telegram chat for alerts |
 
 ### 7. Testing
 
 ```bash
-# Worker tests use @cloudflare/vitest-pool-workers
-cd worker && bun run test
+# Backend: typecheck + lint (no live deployment needed)
+bun run typecheck && bun run lint
 
-# Client tests use standard Rust test framework
+# Client tests use the standard Rust test framework
 cd client && cargo test
 ```
 
 ### 8. Deployment Checklist
 
-- [ ] `wrangler.toml` has correct `database_id` and domain
-- [ ] All secrets set via `wrangler secret put`
-- [ ] D1 migrations applied to production
-- [ ] GitHub Actions secrets configured (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`)
-- [ ] Domain DNS pointed to Cloudflare (if using custom domain)
-- [ ] Admin password set on first dashboard login
+- [ ] Convex env vars set (`ADMIN_JWT_SECRET`, `LATEST_CLIENT_VERSION`, alert keys)
+- [ ] `npx convex deploy` succeeds (schema, functions, crons)
+- [ ] Dashboard built with `VITE_API_URL` pointing at the `.convex.site` URL and hosted
+- [ ] GitHub Actions secret configured (`CONVEX_DEPLOY_KEY`)
+- [ ] Admin password bootstrapped (`POST /api/auth/bootstrap`)
 - [ ] Test alert delivery with `POST /api/alerts/test`
 
 ### 9. Do NOT
 
 - Do **not** use `npm` or `yarn` -- use `bun` for everything
-- Do **not** use `node:fs` or Node.js APIs in the Worker -- use Cloudflare Workers APIs
-- Do **not** use Express patterns -- this is Hono on Cloudflare Workers
-- Do **not** add `dotenv` -- Bun loads `.env` automatically
-- Do **not** modify `wrangler.toml` database_id in commits -- it's environment-specific
-- Do **not** store secrets in `[vars]` in wrangler.toml -- use `wrangler secret put`
+- Do **not** reintroduce Cloudflare Workers / D1 / Durable Objects / R2 / WebSockets -- the backend is Convex
+- Do **not** hand-edit `convex/_generated/` -- regenerate with `npx convex dev`
+- Do **not** add `dotenv` -- Convex env vars are managed via `npx convex env`
 
 ### 10. File Path Alias
 

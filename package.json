@@ -8,7 +8,7 @@
     "dev": "convex dev",
     "deploy": "cd dashboard && bun run build && cd .. && convex deploy",
     "codegen": "convex codegen",
-    "typecheck": "tsc --noEmit && cd dashboard && tsc --noEmit",
+    "typecheck": "tsc --noEmit -p convex/tsconfig.json && cd dashboard && tsc --noEmit",
     "lint": "eslint convex/ && cd dashboard && eslint src/",
     "test": "vitest run"
   },

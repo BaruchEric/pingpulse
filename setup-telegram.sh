@@ -48,13 +48,13 @@ fi
 
 echo "Chat ID found: ${CHAT_ID}"
 
-# Step 4: Set wrangler secrets
+# Step 4: Set Convex environment variables
 echo ""
-echo "Setting Cloudflare Worker secrets..."
-cd "$(dirname "$0")/worker"
+echo "Setting Convex environment variables..."
+cd "$(dirname "$0")"
 
-echo "$BOT_TOKEN" | npx wrangler secret put TELEGRAM_BOT_TOKEN
-echo "$CHAT_ID" | npx wrangler secret put TELEGRAM_CHAT_ID
+npx convex env set TELEGRAM_BOT_TOKEN "$BOT_TOKEN"
+npx convex env set TELEGRAM_CHAT_ID "$CHAT_ID"
 
 # Step 5: Send a test message
 echo ""
