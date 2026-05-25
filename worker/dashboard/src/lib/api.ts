@@ -1,21 +1,44 @@
 import type { Client, MetricsResponse, Alert, PingResult, AnalysisResponse } from "@/lib/types";
 
+// Base URL of the Convex HTTP actions deployment. Empty string keeps requests
+// same-origin (e.g. behind the Vite dev proxy).
+export const API_BASE = import.meta.env.VITE_API_URL ?? "";
+
+const TOKEN_KEY = "pp_token";
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
 class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
   }
 }
 
+export function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const token = getToken();
+  const res = await fetch(apiUrl(path), {
     ...init,
     headers: {
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   });
 
   if (res.status === 401) {
+    clearToken();
     if (window.location.pathname !== "/login") {
       window.location.href = "/login";
     }
@@ -32,12 +55,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   // Auth
-  login: (password: string) =>
-    request<{ token: string }>("/api/auth/login", {
+  login: async (password: string) => {
+    const res = await request<{ token: string }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ password }),
-    }),
-  logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+    });
+    setToken(res.token);
+    return res;
+  },
+  logout: async () => {
+    try {
+      await request<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+    } finally {
+      clearToken();
+    }
+    return { ok: true };
+  },
   me: () => request<{ sub: string; exp: number }>("/api/auth/me"),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<{ ok: boolean }>("/api/auth/password", {
@@ -66,6 +99,10 @@ export const api = {
   getLogs: (id: string, limit: number, offset: number) =>
     request<{ logs: PingResult[]; total: number; limit: number; offset: number }>(
       `/api/metrics/${id}/logs?limit=${limit}&offset=${offset}`
+    ),
+  getSyncStatus: (id: string) =>
+    request<{ last_sync: number | null; total_records: number; latest_probe_ts: number | null }>(
+      `/api/metrics/${id}/sync-status`
     ),
 
   // Alerts
@@ -124,11 +161,15 @@ export const api = {
       { method: "POST" }
     ),
 
-  // Export
+  // Export — returns a download URL. The admin token is passed as a query
+  // param because the browser can't attach an Authorization header to a plain
+  // <a download> navigation.
   exportData: (id: string, format: "json" | "csv", from?: string, to?: string) => {
     const params = new URLSearchParams({ format });
     if (from) params.set("from", from);
     if (to) params.set("to", to);
-    return `/api/export/${id}?${params}`;
+    const token = getToken();
+    if (token) params.set("token", token);
+    return apiUrl(`/api/export/${id}?${params}`);
   },
 };

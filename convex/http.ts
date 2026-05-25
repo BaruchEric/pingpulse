@@ -529,8 +529,14 @@ const apiHandler = httpAction(async (ctx, request) => {
   // ---- export ----
   const exportMatch = path.match(/^\/api\/export\/([^/]+)$/);
   if (exportMatch && method === "GET") {
-    const unauth = await requireAdmin(request);
-    if (unauth) return unauth;
+    // Admin auth via header or, for plain <a download> links, a token query param.
+    const queryToken = params.get("token");
+    const ok = bearer(request)
+      ? await verifyAdminJWT(bearer(request)!, adminSecret())
+      : queryToken
+        ? await verifyAdminJWT(queryToken, adminSecret())
+        : null;
+    if (!ok) return json({ error: "Unauthorized" }, 401);
     const clientId = exportMatch[1]!;
     const format = params.get("format") || "json";
     const from = params.get("from") || new Date(Date.now() - 7 * 86400_000).toISOString();

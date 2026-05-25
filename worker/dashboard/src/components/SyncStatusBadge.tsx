@@ -1,4 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
+import { api } from "@/lib/api";
 
 interface SyncStatus {
   last_sync: number | null;
@@ -33,10 +34,7 @@ function createSyncStore(clientId: string) {
 
   const doFetch = async () => {
     try {
-      const res = await fetch(`/api/metrics/${clientId}/sync-status`);
-      if (!res.ok) return;
-      const json = await res.json() as SyncStatus;
-      status = json;
+      status = await api.getSyncStatus(clientId);
       notify();
     } catch {
       // ignore

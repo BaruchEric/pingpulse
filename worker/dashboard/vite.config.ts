@@ -9,12 +9,8 @@ export default defineConfig({
       "@": "/src",
     },
   },
-  server: {
-    proxy: {
-      "/api": "http://localhost:8787",
-      "/ws": { target: "ws://localhost:8787", ws: true },
-    },
-  },
+  // The dashboard talks to the Convex deployment directly. Set VITE_API_URL to
+  // the deployment's HTTP actions URL (https://<name>.convex.site) in .env.local.
   build: {
     outDir: "dist",
   },
