@@ -71,7 +71,6 @@ struct SanitizedConfig {
 #[derive(Serialize)]
 struct SanitizedServer {
     base_url: String,
-    ws_url: String,
     client_id: String,
     client_secret: String,
 }
@@ -80,7 +79,6 @@ fn sanitize_config(config: &Config) -> SanitizedConfig {
     SanitizedConfig {
         server: SanitizedServer {
             base_url: config.server.base_url.clone(),
-            ws_url: config.server.ws_url.clone(),
             client_id: config.server.client_id.clone(),
             client_secret: "REDACTED".into(),
         },
@@ -347,7 +345,6 @@ mod tests {
         let config = Config {
             server: crate::config::ServerConfig {
                 base_url: "https://ping.beric.ca".into(),
-                ws_url: "/ws/abc".into(),
                 client_id: "abc123".into(),
                 client_secret: "super-secret-value".into(),
             },

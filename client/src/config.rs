@@ -19,7 +19,6 @@ pub struct Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub base_url: String,
-    pub ws_url: String,
     pub client_id: String,
     pub client_secret: String,
 }
@@ -139,8 +138,8 @@ impl Default for SyncConfig {
     }
 }
 
-/// Remote config pushed by server via WebSocket `config_update` message.
-/// Maps to backend `ClientConfig` (all 7 fields).
+/// Remote config returned by the server in each heartbeat response.
+/// Maps to backend `ClientConfig`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RemoteConfig {
     pub ping_interval_s: u32,
@@ -265,14 +264,12 @@ impl Config {
 
     pub fn new_from_registration(
         base_url: String,
-        ws_url: String,
         client_id: String,
         client_secret: String,
     ) -> Self {
         Self {
             server: ServerConfig {
                 base_url,
-                ws_url,
                 client_id,
                 client_secret,
             },
@@ -326,7 +323,6 @@ mod tests {
         let config = Config {
             server: ServerConfig {
                 base_url: "https://ping.beric.ca".into(),
-                ws_url: "/ws/abc123".into(),
                 client_id: "abc123".into(),
                 client_secret: "secret".into(),
             },
@@ -382,7 +378,6 @@ mod tests {
         let mut config = Config {
             server: ServerConfig {
                 base_url: "https://ping.beric.ca".into(),
-                ws_url: "/ws/abc".into(),
                 client_id: "abc".into(),
                 client_secret: "sec".into(),
             },

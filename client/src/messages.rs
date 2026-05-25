@@ -50,56 +50,56 @@ pub struct ServerLogEntry {
     pub detail: Option<String>,
 }
 
-// --- Incoming messages (from server) ---
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-#[allow(dead_code)] // fields populated by serde deserialization
-pub enum IncomingMessage {
-    Ping {
-        id: String,
-        ts: u64,
-        #[serde(default)]
-        payload: Option<Vec<u8>>,
-    },
-    Pong {
-        id: String,
-        ts: u64,
-        client_ts: u64,
-    },
-    ConfigUpdate {
-        config: RemoteConfig,
-    },
-    StartSpeedTest {
-        test_type: SpeedTestType,
-        #[serde(default)]
-        target: SpeedTestTarget,
-    },
-    Deregistered {
-        reason: String,
-    },
-    ServerLogs {
-        entries: Vec<ServerLogEntry>,
-    },
-    SelfUpdate {
-        version: String,
-        repo: String,
-    },
-}
-
-// --- Outgoing messages (to server) ---
+// --- Heartbeat protocol (HTTP) ---
+//
+// The client POSTs a Heartbeat every ping interval and receives a
+// HeartbeatResponse carrying the current config, queued admin commands, the
+// latest available client version, and recent server-side log entries. This
+// replaces the former WebSocket ping/pong + config_update + command push.
 
 #[derive(Debug, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum OutgoingMessage {
-    Pong { id: String, ts: u64, client_ts: u64 },
-    Ping { id: String, ts: u64 },
-    SpeedTestResult { result: SpeedTestResult },
-    ProbeResult {
-        session_id: String,
-        record: crate::store::ProbeRecord,
-    },
-    Error { message: String },
+pub struct Heartbeat {
+    /// Round-trip latency the client measured for the previous heartbeat (ms).
+    pub rtt_ms: Option<f64>,
+    pub jitter_ms: Option<f64>,
+    pub status: Option<String>,
+    pub client_version: String,
+    pub timezone: Option<String>,
+    pub include_logs: bool,
+}
+
+// Server-applied state, surfaced for completeness/forward-compat. The client
+// does not act on these directly (the server applies pause/simulation).
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+pub struct Simulation {
+    #[serde(default)]
+    pub latency_ms: f64,
+    #[serde(default)]
+    pub loss_pct: f64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Command {
+    pub command: String,
+    #[serde(default)]
+    pub params: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct HeartbeatResponse {
+    pub config: RemoteConfig,
+    #[serde(default)]
+    pub paused: bool,
+    #[serde(default)]
+    pub simulation: Option<Simulation>,
+    #[serde(default)]
+    pub latest_version: String,
+    #[serde(default)]
+    pub commands: Vec<Command>,
+    #[serde(default)]
+    pub server_logs: Vec<ServerLogEntry>,
 }
 
 #[cfg(test)]
@@ -107,164 +107,62 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_deserialize_ping_from_server() {
-        let json = r#"{"type":"ping","id":"abc-123","ts":1710700000000}"#;
-        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
-        match msg {
-            IncomingMessage::Ping { id, ts, .. } => {
-                assert_eq!(id, "abc-123");
-                assert_eq!(ts, 1710700000000);
-            }
-            _ => panic!("Expected Ping"),
-        }
-    }
-
-    #[test]
-    fn test_deserialize_pong_from_server() {
-        let json = r#"{"type":"pong","id":"abc-123","ts":1710700000000,"client_ts":1710700000050}"#;
-        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
-        match msg {
-            IncomingMessage::Pong { id, ts, client_ts } => {
-                assert_eq!(id, "abc-123");
-                assert_eq!(ts, 1710700000000);
-                assert_eq!(client_ts, 1710700000050);
-            }
-            _ => panic!("Expected Pong"),
-        }
-    }
-
-    #[test]
-    fn test_deserialize_start_speed_test() {
-        let json = r#"{"type":"start_speed_test","test_type":"full"}"#;
-        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
-        match msg {
-            IncomingMessage::StartSpeedTest { test_type, target } => {
-                assert_eq!(test_type, SpeedTestType::Full);
-                assert_eq!(target, SpeedTestTarget::Worker); // default
-            }
-            _ => panic!("Expected StartSpeedTest"),
-        }
-    }
-
-    #[test]
-    fn test_deserialize_start_speed_test_edge() {
-        let json = r#"{"type":"start_speed_test","test_type":"probe","target":"edge"}"#;
-        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
-        match msg {
-            IncomingMessage::StartSpeedTest { test_type, target } => {
-                assert_eq!(test_type, SpeedTestType::Probe);
-                assert_eq!(target, SpeedTestTarget::Edge);
-            }
-            _ => panic!("Expected StartSpeedTest"),
-        }
-    }
-
-    #[test]
-    fn test_deserialize_deregistered() {
-        let json = r#"{"type":"deregistered","reason":"Client deleted by admin"}"#;
-        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
-        match msg {
-            IncomingMessage::Deregistered { reason } => {
-                assert_eq!(reason, "Client deleted by admin");
-            }
-            _ => panic!("Expected Deregistered"),
-        }
-    }
-
-    #[test]
-    fn test_deserialize_config_update() {
-        let json = r#"{"type":"config_update","config":{"ping_interval_s":15,"probe_size_bytes":131072,"full_test_payload_bytes":5242880,"full_test_schedule":"0 */3 * * *","alert_latency_threshold_ms":50.0,"alert_loss_threshold_pct":2.5,"grace_period_s":120}}"#;
-        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
-        match msg {
-            IncomingMessage::ConfigUpdate { config } => {
-                assert_eq!(config.ping_interval_s, 15);
-            }
-            _ => panic!("Expected ConfigUpdate"),
-        }
-    }
-
-    #[test]
-    fn test_serialize_pong() {
-        let msg = OutgoingMessage::Pong {
-            id: "abc-123".into(),
-            ts: 1710700000000,
-            client_ts: 1710700000050,
+    fn test_serialize_heartbeat() {
+        let hb = Heartbeat {
+            rtt_ms: Some(12.5),
+            jitter_ms: None,
+            status: Some("ok".into()),
+            client_version: "1.0.5".into(),
+            timezone: None,
+            include_logs: false,
         };
-        let json = serde_json::to_string(&msg).unwrap();
-        assert!(json.contains(r#""type":"pong""#));
-        assert!(json.contains(r#""ts":1710700000000"#));
-        assert!(json.contains(r#""client_ts":1710700000050"#));
+        let json = serde_json::to_string(&hb).unwrap();
+        assert!(json.contains(r#""rtt_ms":12.5"#));
+        assert!(json.contains(r#""status":"ok""#));
     }
 
     #[test]
-    fn test_serialize_client_ping() {
-        let msg = OutgoingMessage::Ping {
-            id: "client-ping-1".into(),
-            ts: 1710700001000,
-        };
-        let json = serde_json::to_string(&msg).unwrap();
-        assert!(json.contains(r#""type":"ping""#));
-        assert!(json.contains(r#""ts":1710700001000"#));
+    fn test_deserialize_heartbeat_response() {
+        let json = r#"{
+            "config":{"ping_interval_s":15,"speed_test_interval_s":180,"probe_size_bytes":131072,"full_test_payload_bytes":5242880,"full_test_schedule":"0 */3 * * *","alert_latency_threshold_ms":50.0,"alert_loss_threshold_pct":2.5,"grace_period_s":120},
+            "paused":false,
+            "simulation":{"latency_ms":0,"loss_pct":0},
+            "latest_version":"1.0.6",
+            "commands":[{"command":"speed_test","params":{"test_type":"full","target":"edge"}}],
+            "server_logs":[]
+        }"#;
+        let resp: HeartbeatResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.config.ping_interval_s, 15);
+        assert_eq!(resp.latest_version, "1.0.6");
+        assert_eq!(resp.commands.len(), 1);
+        assert_eq!(resp.commands[0].command, "speed_test");
     }
 
     #[test]
-    fn test_serialize_probe_result() {
-        let msg = OutgoingMessage::ProbeResult {
-            session_id: "sess-123".into(),
-            record: crate::store::ProbeRecord {
-                seq_id: 42,
-                probe_type: "icmp".into(),
-                target: "8.8.8.8".into(),
-                timestamp: 1710700000000,
-                rtt_ms: Some(12.5),
-                status_code: None,
-                status: "ok".into(),
-                jitter_ms: None,
-            },
+    fn test_deserialize_speed_test_command_params() {
+        let cmd = Command {
+            command: "speed_test".into(),
+            params: serde_json::json!({ "test_type": "probe", "target": "worker" }),
         };
-        let json = serde_json::to_string(&msg).unwrap();
-        assert!(json.contains(r#""type":"probe_result""#));
-        assert!(json.contains(r#""session_id":"sess-123""#));
-        assert!(json.contains(r#""seq_id":42"#));
+        assert_eq!(cmd.params["test_type"], "probe");
+        assert_eq!(cmd.params["target"], "worker");
     }
 
     #[test]
     fn test_serialize_speed_test_result() {
-        let msg = OutgoingMessage::SpeedTestResult {
-            result: SpeedTestResult {
-                client_id: "abc123".into(),
-                timestamp: "2026-03-17T12:00:00Z".into(),
-                test_type: SpeedTestType::Probe,
-                target: SpeedTestTarget::Worker,
-                download_mbps: 95.2,
-                upload_mbps: 42.1,
-                payload_bytes: 262_144,
-                duration_ms: 350,
-            },
+        let result = SpeedTestResult {
+            client_id: "abc123".into(),
+            timestamp: "2026-03-17T12:00:00Z".into(),
+            test_type: SpeedTestType::Probe,
+            target: SpeedTestTarget::Worker,
+            download_mbps: 95.2,
+            upload_mbps: 42.1,
+            payload_bytes: 262_144,
+            duration_ms: 350,
         };
-        let json = serde_json::to_string(&msg).unwrap();
-        assert!(json.contains(r#""type":"speed_test_result""#));
+        let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains(r#""download_mbps":95.2"#));
         assert!(json.contains(r#""type":"probe""#));
         assert!(json.contains(r#""target":"worker""#));
-    }
-
-    #[test]
-    fn test_serialize_speed_test_result_edge() {
-        let msg = OutgoingMessage::SpeedTestResult {
-            result: SpeedTestResult {
-                client_id: "abc123".into(),
-                timestamp: "2026-03-17T12:00:00Z".into(),
-                test_type: SpeedTestType::Full,
-                target: SpeedTestTarget::Edge,
-                download_mbps: 200.5,
-                upload_mbps: 85.3,
-                payload_bytes: 10_485_760,
-                duration_ms: 1200,
-            },
-        };
-        let json = serde_json::to_string(&msg).unwrap();
-        assert!(json.contains(r#""target":"edge""#));
-        assert!(json.contains(r#""type":"full""#));
     }
 }

@@ -4,6 +4,7 @@
 
 mod agent;
 mod config;
+mod heartbeat;
 mod logger;
 mod messages;
 mod service;
@@ -11,7 +12,6 @@ mod speed_test;
 mod probe;
 mod store;
 mod sync;
-mod websocket;
 
 use clap::{Parser, Subcommand};
 
@@ -121,7 +121,6 @@ async fn cmd_register(server: &str, token: &str, name: &str, location: &str) -> 
     struct RegisterResponse {
         client_id: String,
         client_secret: String,
-        ws_url: String,
     }
 
     if config::Config::config_path().exists() {
@@ -157,7 +156,6 @@ async fn cmd_register(server: &str, token: &str, name: &str, location: &str) -> 
     let reg: RegisterResponse = resp.json().await?;
     let config = config::Config::new_from_registration(
         server.to_string(),
-        reg.ws_url,
         reg.client_id.clone(),
         reg.client_secret,
     );
@@ -195,10 +193,10 @@ async fn cmd_start_foreground() -> anyhow::Result<()> {
         }
     });
 
-    let ws_result = websocket::run(config).await;
+    let result = heartbeat::run(config).await;
 
     agent_handle.abort();
-    ws_result
+    result
 }
 
 fn cmd_start_service() -> anyhow::Result<()> {

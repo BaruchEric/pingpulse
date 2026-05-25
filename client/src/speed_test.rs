@@ -7,6 +7,31 @@ use crate::messages::{SpeedTestResult, SpeedTestTarget, SpeedTestType};
 
 const EDGE_BASE: &str = "https://speed.cloudflare.com";
 
+/// POST a completed speed test result to the server.
+pub async fn report(
+    http: &Client,
+    base_url: &str,
+    client_id: &str,
+    client_secret: &str,
+    result: &SpeedTestResult,
+) -> anyhow::Result<()> {
+    let url = format!(
+        "{}/api/clients/{}/speedtest-result",
+        base_url.trim_end_matches('/'),
+        client_id
+    );
+    let resp = http
+        .post(&url)
+        .header("Authorization", format!("Bearer {client_secret}"))
+        .json(result)
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        anyhow::bail!("speedtest-result returned {}", resp.status());
+    }
+    Ok(())
+}
+
 #[allow(clippy::cast_precision_loss)]
 fn bytes_to_mbps(bytes: u64, elapsed: Duration) -> f64 {
     (bytes as f64 * 8.0) / (elapsed.as_secs_f64() * 1_000_000.0)
