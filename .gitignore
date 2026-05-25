@@ -6,3 +6,7 @@ worker/dashboard/node_modules/
 node_modules/
 .playwright-cli/
 .wrangler/
+
+# Convex
+.env.local
+.convex/

@@ -1,0 +1,26 @@
+{
+  "name": "pingpulse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PingPulse — network monitoring backend on Convex",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "cd dashboard && bun run build && cd .. && convex deploy",
+    "codegen": "convex codegen",
+    "typecheck": "tsc --noEmit && cd dashboard && tsc --noEmit",
+    "lint": "eslint convex/ && cd dashboard && eslint src/",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "convex": "^1.27.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.0.0",
+    "eslint": "^10.1.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1",
+    "vitest": "^4.1.0"
+  }
+}
