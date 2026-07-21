@@ -81,9 +81,17 @@ pub async fn run_trace(target: &str, rounds: u8) -> anyhow::Result<Vec<TraceHop>
 
     let handle = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<TraceHop>> {
         let addr = resolve(&target)?;
+        // Raw sockets require root on macOS/Linux, but the daemon runs unprivileged
+        // (its ICMP probes use datagram sockets, like `ping`). Unprivileged mode uses
+        // ICMP datagram sockets too. Windows has no unprivileged mode and its service
+        // runs elevated, so keep Privileged there.
+        #[cfg(windows)]
+        let privilege_mode = PrivilegeMode::Privileged;
+        #[cfg(not(windows))]
+        let privilege_mode = PrivilegeMode::Unprivileged;
         let tracer = Builder::new(addr)
             .protocol(Protocol::Icmp)
-            .privilege_mode(PrivilegeMode::Privileged)
+            .privilege_mode(privilege_mode)
             .max_rounds(Some(usize::from(rounds)))
             .max_ttl(MAX_TTL)
             .build()
