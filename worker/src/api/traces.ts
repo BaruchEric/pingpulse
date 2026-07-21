@@ -1,6 +1,24 @@
 import { Hono } from "hono";
 import type { AppEnv } from "@/middleware/auth-guard";
 import { authGuard } from "@/middleware/auth-guard";
+import { enrichAddrs, hasEnrichment, isPublicIpv4 } from "@/services/enrich";
+
+interface TraceHopRow {
+  ttl: number;
+  addr: string | null;
+  hostname: string | null;
+  asn: number | null;
+  asn_name: string | null;
+  geo: string | null;
+  loss_pct: number | null;
+  samples: number | null;
+  last_ms: number | null;
+  avg_ms: number | null;
+  best_ms: number | null;
+  worst_ms: number | null;
+  stddev_ms: number | null;
+  jitter_ms: number | null;
+}
 
 export const traceRoutes = new Hono<AppEnv>();
 
@@ -32,13 +50,42 @@ traceRoutes.get("/:id/traces/:traceId", async (c) => {
 
   if (!trace) return c.json({ error: "Trace not found" }, 404);
 
-  const hops = await c.env.DB.prepare(
+  const hopsRes = await c.env.DB.prepare(
     `SELECT ttl, addr, hostname, asn, asn_name, geo,
             loss_pct, samples, last_ms, avg_ms, best_ms, worst_ms, stddev_ms, jitter_ms
      FROM trace_hops WHERE trace_id = ? ORDER BY ttl ASC`
   )
     .bind(traceId)
-    .all();
+    .all<TraceHopRow>();
 
-  return c.json({ trace, hops: hops.results ?? [] });
+  const hops = hopsRes.results ?? [];
+
+  // Lazily enrich hops with ASN / country / reverse-DNS the first time a trace
+  // is viewed, then persist so later reads are free. Best-effort: lookup
+  // failures leave the columns null and the trace is still returned.
+  const pending = hops.filter(
+    (h): h is TraceHopRow & { addr: string } =>
+      h.asn == null && typeof h.addr === "string" && isPublicIpv4(h.addr)
+  );
+  if (pending.length > 0) {
+    const enrichment = await enrichAddrs(pending.map((h) => h.addr));
+    const updates = [];
+    for (const h of hops) {
+      const e = h.addr ? enrichment.get(h.addr) : undefined;
+      if (!e || !hasEnrichment(e)) continue;
+      h.hostname = e.hostname;
+      h.asn = e.asn;
+      h.asn_name = e.asn_name;
+      h.geo = e.geo;
+      updates.push(
+        c.env.DB.prepare(
+          `UPDATE trace_hops SET hostname = ?, asn = ?, asn_name = ?, geo = ?
+           WHERE trace_id = ? AND ttl = ?`
+        ).bind(e.hostname, e.asn, e.asn_name, e.geo, traceId, h.ttl)
+      );
+    }
+    if (updates.length > 0) await c.env.DB.batch(updates);
+  }
+
+  return c.json({ trace, hops });
 });
