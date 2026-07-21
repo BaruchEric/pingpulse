@@ -1,4 +1,4 @@
-import type { Client, MetricsResponse, Alert, PingResult, AnalysisResponse } from "@/lib/types";
+import type { Client, MetricsResponse, Alert, PingResult, AnalysisResponse, TraceSummary, TraceDetail } from "@/lib/types";
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -111,6 +111,12 @@ export const api = {
   // Analysis
   getAnalysis: (id: string, from: string, to: string) =>
     request<AnalysisResponse>(`/api/metrics/${id}/analysis?from=${from}&to=${to}`),
+
+  // Path traces
+  listTraces: (id: string) =>
+    request<{ traces: TraceSummary[] }>(`/api/clients/${id}/traces`),
+  getTrace: (id: string, traceId: string) =>
+    request<TraceDetail>(`/api/clients/${id}/traces/${traceId}`),
 
   // Reports
   generateReport: (id: string) =>

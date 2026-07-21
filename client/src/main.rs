@@ -11,6 +11,7 @@ mod speed_test;
 mod probe;
 mod store;
 mod sync;
+mod trace;
 mod websocket;
 
 use clap::{Parser, Subcommand};

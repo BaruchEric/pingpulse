@@ -119,6 +119,14 @@ export function useClientStatus(id: string) {
   return usePolling(() => api.getClientStatus(id), 5_000, [id]);
 }
 
+export function useTraces(clientId: string) {
+  return usePolling(
+    () => api.listTraces(clientId).then((r) => r.traces),
+    15_000,
+    [clientId]
+  );
+}
+
 export function useLogs(clientId: string, page: number, perPage = 50) {
   return usePolling(
     () => api.getLogs(clientId, perPage, page * perPage),

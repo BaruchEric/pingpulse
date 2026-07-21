@@ -12,6 +12,7 @@ import { syncRoutes } from "@/api/sync";
 import { connectivityRoutes } from "@/api/connectivity";
 import { analysisRoutes } from "@/api/analysis";
 import { telegramRoutes } from "@/api/telegram";
+import { traceRoutes } from "@/api/traces";
 import { deleteClientCascade } from "@/utils/client-db";
 import { clientSecretAuth } from "@/middleware/client-auth";
 
@@ -45,6 +46,7 @@ export function createRouter() {
 
   // Protected routes — auth applied per-route-file via .use("*", authGuard)
   app.route("/api/clients", clientRoutes);
+  app.route("/api/clients", traceRoutes);
   app.route("/api/metrics", metricsRoutes);
   app.route("/api/metrics", analysisRoutes);
   app.route("/api/alerts", alertRoutes);

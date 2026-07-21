@@ -52,6 +52,11 @@ pub struct ServerLogEntry {
 
 // --- Incoming messages (from server) ---
 
+/// Default number of trace rounds when the server omits it.
+fn default_trace_rounds() -> u8 {
+    3
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[allow(dead_code)] // fields populated by serde deserialization
@@ -85,6 +90,11 @@ pub enum IncomingMessage {
         version: String,
         repo: String,
     },
+    RunTrace {
+        target: String,
+        #[serde(default = "default_trace_rounds")]
+        rounds: u8,
+    },
 }
 
 // --- Outgoing messages (to server) ---
@@ -98,6 +108,13 @@ pub enum OutgoingMessage {
     ProbeResult {
         session_id: String,
         record: crate::store::ProbeRecord,
+    },
+    TraceResult {
+        session_id: String,
+        target: String,
+        protocol: String,
+        started_at: String,
+        hops: Vec<crate::trace::TraceHop>,
     },
     Error { message: String },
 }
@@ -266,5 +283,54 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains(r#""target":"edge""#));
         assert!(json.contains(r#""type":"full""#));
+    }
+
+    #[test]
+    fn test_deserialize_run_trace() {
+        let json = r#"{"type":"run_trace","target":"1.1.1.1","rounds":5}"#;
+        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            IncomingMessage::RunTrace { target, rounds } => {
+                assert_eq!(target, "1.1.1.1");
+                assert_eq!(rounds, 5);
+            }
+            _ => panic!("Expected RunTrace"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_run_trace_default_rounds() {
+        let json = r#"{"type":"run_trace","target":"8.8.8.8"}"#;
+        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            IncomingMessage::RunTrace { rounds, .. } => assert_eq!(rounds, 3),
+            _ => panic!("Expected RunTrace"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_trace_result() {
+        let msg = OutgoingMessage::TraceResult {
+            session_id: "sess-1".into(),
+            target: "1.1.1.1".into(),
+            protocol: "icmp".into(),
+            started_at: "2026-07-21T00:00:00+00:00".into(),
+            hops: vec![crate::trace::TraceHop {
+                ttl: 1,
+                addr: Some("192.168.1.1".into()),
+                loss_pct: 0.0,
+                samples: 3,
+                last_ms: Some(1.2),
+                avg_ms: 1.1,
+                best_ms: Some(0.9),
+                worst_ms: Some(1.4),
+                stddev_ms: 0.2,
+                jitter_ms: Some(0.1),
+            }],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""type":"trace_result""#));
+        assert!(json.contains(r#""session_id":"sess-1""#));
+        assert!(json.contains(r#""ttl":1"#));
     }
 }

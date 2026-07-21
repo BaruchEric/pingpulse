@@ -84,7 +84,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                 tokio::time::interval(Duration::from_secs(u64::from(icmp_interval_s)));
             let mut http_tick =
                 tokio::time::interval(Duration::from_secs(u64::from(http_interval_s)));
-            let mut cleanup_tick = tokio::time::interval(Duration::from_secs(3600));
+            let mut cleanup_tick = tokio::time::interval(Duration::from_hours(1));
 
             // Skip the immediate first tick for all intervals
             icmp_tick.tick().await;
@@ -332,6 +332,7 @@ async fn connect_and_run(
                                     &mut ping_interval,
                                     &mut speed_test_interval,
                                     &speed_tx,
+                                    store.session_id(),
                                 ).await {
                                     return Ok(shutdown);
                                 }
@@ -431,7 +432,7 @@ async fn connect_and_run(
     }
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 async fn handle_message(
     msg: IncomingMessage,
     config: &mut Config,
@@ -440,6 +441,7 @@ async fn handle_message(
     ping_interval: &mut time::Interval,
     speed_test_interval: &mut time::Interval,
     speed_tx: &mpsc::UnboundedSender<OutgoingMessage>,
+    session_id: &str,
 ) -> Option<Shutdown> {
     match msg {
         IncomingMessage::Ping { id, ts, .. } => {
@@ -567,6 +569,33 @@ async fn handle_message(
 
                 if tx.send(msg).is_err() {
                     warn!(event = "speed_test_channel_closed");
+                }
+            });
+        }
+
+        IncomingMessage::RunTrace { target, rounds } => {
+            info!(event = "run_trace_requested", target = %target, rounds = rounds);
+            let tx = speed_tx.clone();
+            let session_id = session_id.to_string();
+            tokio::spawn(async move {
+                let started_at = chrono::Utc::now().to_rfc3339();
+                let msg = match crate::trace::run_trace(&target, rounds).await {
+                    Ok(hops) => OutgoingMessage::TraceResult {
+                        session_id,
+                        target,
+                        protocol: "icmp".to_string(),
+                        started_at,
+                        hops,
+                    },
+                    Err(e) => {
+                        error!(event = "run_trace_error", error = %e);
+                        OutgoingMessage::Error {
+                            message: format!("Trace failed: {e}"),
+                        }
+                    }
+                };
+                if tx.send(msg).is_err() {
+                    warn!(event = "trace_channel_closed");
                 }
             });
         }

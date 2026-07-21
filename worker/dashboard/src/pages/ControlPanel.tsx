@@ -16,6 +16,7 @@ export function ControlPanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [simLatency, setSimLatency] = useState("0");
   const [simLoss, setSimLoss] = useState("0");
+  const [traceTarget, setTraceTarget] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const simInitialized = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -218,6 +219,31 @@ export function ControlPanel() {
           </div>
           <p className="text-xs text-zinc-400">
             Inject artificial latency and packet loss to test alerting. Server-side only — doesn't affect actual network.
+          </p>
+        </div>
+
+        {/* Path Trace */}
+        <div className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/50 p-5">
+          <h2 className="text-sm font-medium text-zinc-400">Path Trace</h2>
+          <div>
+            <label className="block text-xs text-zinc-400">Target (IP or hostname)</label>
+            <input
+              type="text"
+              value={traceTarget}
+              onChange={(e) => setTraceTarget(e.target.value)}
+              placeholder="1.1.1.1"
+              className={INPUT_CLASS}
+            />
+          </div>
+          <button
+            onClick={() => runCommand("run_trace", { target: traceTarget.trim(), rounds: 3 }, "Path trace")}
+            disabled={busy !== null || !status?.connected || !traceTarget.trim()}
+            className={btnPrimary}
+          >
+            {busy === "run_trace" ? "Tracing..." : "Trace path"}
+          </button>
+          <p className="text-xs text-zinc-400">
+            Runs a bounded traceroute from the client to the target. Hops appear on the client's overview page once the trace completes.
           </p>
         </div>
 

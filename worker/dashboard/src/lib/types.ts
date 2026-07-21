@@ -90,6 +90,38 @@ export interface Outage {
   duration_s: number | null;
 }
 
+// Path traces (traceroute/mtr-style). Keep in sync with worker/src/types.ts.
+export interface TraceSummary {
+  id: string;
+  target: string;
+  protocol: string;
+  started_at: string;
+  trigger: string;
+  received_at: string;
+}
+
+export interface TraceHop {
+  ttl: number;
+  addr: string | null;
+  hostname: string | null;
+  asn: number | null;
+  asn_name: string | null;
+  geo: string | null;
+  loss_pct: number | null;
+  samples: number | null;
+  last_ms: number | null;
+  avg_ms: number | null;
+  best_ms: number | null;
+  worst_ms: number | null;
+  stddev_ms: number | null;
+  jitter_ms: number | null;
+}
+
+export interface TraceDetail {
+  trace: TraceSummary;
+  hops: TraceHop[];
+}
+
 export interface MetricsSummary {
   total_pings: number;
   ok_pings: number;

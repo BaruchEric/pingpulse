@@ -16,6 +16,10 @@ const statements = [
   `CREATE TABLE IF NOT EXISTS bot_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS client_probe_results (id TEXT PRIMARY KEY, client_id TEXT NOT NULL, session_id TEXT, probe_type TEXT NOT NULL, target TEXT NOT NULL, timestamp TEXT NOT NULL, rtt_ms REAL, status TEXT NOT NULL, http_status INTEGER, error TEXT, FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE)`,
   `CREATE INDEX IF NOT EXISTS idx_client_probe_results_client_ts ON client_probe_results(client_id, timestamp)`,
+  `CREATE TABLE IF NOT EXISTS traces (id TEXT PRIMARY KEY, client_id TEXT NOT NULL, session_id TEXT NOT NULL, target TEXT NOT NULL, protocol TEXT NOT NULL DEFAULT 'icmp', started_at TEXT NOT NULL, trigger TEXT NOT NULL DEFAULT 'manual', received_at TEXT NOT NULL, FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE)`,
+  `CREATE INDEX IF NOT EXISTS idx_traces_client ON traces(client_id, started_at)`,
+  `CREATE TABLE IF NOT EXISTS trace_hops (id INTEGER PRIMARY KEY AUTOINCREMENT, trace_id TEXT NOT NULL, ttl INTEGER NOT NULL, addr TEXT, hostname TEXT, asn INTEGER, asn_name TEXT, geo TEXT, loss_pct REAL, samples INTEGER, last_ms REAL, avg_ms REAL, best_ms REAL, worst_ms REAL, stddev_ms REAL, jitter_ms REAL, FOREIGN KEY (trace_id) REFERENCES traces(id) ON DELETE CASCADE)`,
+  `CREATE INDEX IF NOT EXISTS idx_trace_hops_trace ON trace_hops(trace_id, ttl)`,
 ];
 
 for (const sql of statements) {

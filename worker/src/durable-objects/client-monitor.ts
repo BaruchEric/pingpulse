@@ -287,6 +287,32 @@ export class ClientMonitor implements DurableObject {
         case "speed_test_result":
           await this.handleSpeedTestResult(msg.result);
           break;
+        case "trace_result": {
+          const { session_id, target, protocol, started_at, hops } = msg;
+          const traceId = crypto.randomUUID();
+          await this.env.DB.batch([
+            this.env.DB.prepare(
+              `INSERT INTO traces
+                 (id, client_id, session_id, target, protocol, started_at, trigger, received_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            ).bind(
+              traceId, this.clientId, session_id, target, protocol, started_at,
+              "manual", new Date().toISOString()
+            ),
+            ...hops.map((h) =>
+              this.env.DB.prepare(
+                `INSERT INTO trace_hops
+                   (trace_id, ttl, addr, loss_pct, samples, last_ms, avg_ms, best_ms, worst_ms, stddev_ms, jitter_ms)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              ).bind(
+                traceId, h.ttl, h.addr ?? null, h.loss_pct, h.samples,
+                h.last_ms ?? null, h.avg_ms, h.best_ms ?? null, h.worst_ms ?? null,
+                h.stddev_ms, h.jitter_ms ?? null
+              )
+            ),
+          ]);
+          break;
+        }
         case "probe_result": {
           const { session_id, record } = msg as { type: "probe_result"; session_id: string; record: ProbeRecord };
           // Write directly to D1 for real-time ingestion
@@ -884,6 +910,18 @@ export class ClientMonitor implements DurableObject {
         this.config = { ...this.config, ...configUpdates };
         this.broadcast({ type: "config_update", config: this.config });
         return Response.json({ ok: true, config: this.config });
+      }
+
+      case "run_trace": {
+        const target = typeof params?.target === "string" ? params.target.trim() : "";
+        if (!target) return Response.json({ error: "No target specified" }, { status: 400 });
+        if (this.sessions.length === 0) {
+          return Response.json({ ok: false, reason: "not_connected" });
+        }
+        const requested = Number(params?.rounds ?? 3);
+        const rounds = Number.isFinite(requested) && requested > 0 ? Math.min(Math.floor(requested), 10) : 3;
+        this.broadcast({ type: "run_trace", target, rounds });
+        return Response.json({ ok: true, target, rounds });
       }
 
       default:

@@ -34,7 +34,7 @@ impl ProbeEngine {
             }
         };
         let http_client = HttpClient::builder()
-            .timeout(Duration::from_millis(5000))
+            .timeout(Duration::from_secs(5))
             .build()?;
         Ok(Self {
             ping_client,

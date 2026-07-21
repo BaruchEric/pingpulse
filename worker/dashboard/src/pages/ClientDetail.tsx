@@ -14,6 +14,7 @@ import { AlertRow } from "@/components/AlertRow";
 import { LogsChart } from "@/components/LogsChart";
 import { AnalysisSummaryCard } from "@/components/AnalysisSummaryCard";
 import { ProbeStatsTable } from "@/components/ProbeStatsTable";
+import { TracesCard } from "@/components/TracesCard";
 import { HourlyHeatmap } from "@/components/HourlyHeatmap";
 import { DirectionAsymmetry } from "@/components/DirectionAsymmetry";
 import { AlertStormSummary } from "@/components/AlertStormSummary";
@@ -245,6 +246,9 @@ export function ClientDetail() {
           <OutageTimeline outages={metrics.outages} {...getTimeRange(range)} />
         </div>
       )}
+
+      {/* Path traces */}
+      <TracesCard clientId={clientId} />
 
       {/* Recent alerts */}
       {alerts && alerts.length > 0 && (

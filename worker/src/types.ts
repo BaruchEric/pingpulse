@@ -264,6 +264,20 @@ export interface Env {
   LATEST_CLIENT_VERSION: string;
 }
 
+/** A single hop in a path trace (traceroute/mtr-style), produced by the client. */
+export interface TraceHop {
+  ttl: number;
+  addr: string | null;
+  loss_pct: number;
+  samples: number;
+  last_ms: number | null;
+  avg_ms: number;
+  best_ms: number | null;
+  worst_ms: number | null;
+  stddev_ms: number;
+  jitter_ms: number | null;
+}
+
 export type WSMessage =
   | { type: "ping"; id: string; ts: number; payload?: ArrayBuffer }
   | { type: "pong"; id: string; ts: number; client_ts: number }
@@ -275,4 +289,13 @@ export type WSMessage =
   | { type: "server_logs"; entries: ServerLogEntry[] }
   | { type: "update_available"; latest_version: string; download_url: string }
   | { type: "probe_result"; session_id: string; record: ProbeRecord }
-  | { type: "self_update"; version: string; repo: string };
+  | { type: "self_update"; version: string; repo: string }
+  | { type: "run_trace"; target: string; rounds: number }
+  | {
+      type: "trace_result";
+      session_id: string;
+      target: string;
+      protocol: string;
+      started_at: string;
+      hops: TraceHop[];
+    };

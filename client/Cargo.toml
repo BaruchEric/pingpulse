@@ -25,6 +25,9 @@ uuid = { version = "1", features = ["v4"] }
 axum = "0.8"
 tower-http = { version = "0.6", features = ["cors"] }
 surge-ping = "0.8"
+# Path-tracing engine (Phase 1). Pinned to a trippy master rev because the
+# 0.14 API is not yet released; move to a crates.io version once published.
+trippy-core = { git = "https://github.com/fujiapple852/trippy", rev = "88d97fa5544b21895836298a5c908602f4f90a82" }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
