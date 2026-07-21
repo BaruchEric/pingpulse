@@ -6,7 +6,7 @@ Cloudflare Workers project with a Vite/React dashboard.
 
 - `worker/` — Cloudflare Worker (Hono API, Durable Objects, D1)
 - `worker/dashboard/` — React SPA (Vite, react-router)
-- `client/` — Native monitoring client (Zig)
+- `client/` — Native monitoring client (Rust, crate `pingpulse`: Tokio, surge-ping, reqwest, axum)
 
 ## Checks
 
