@@ -51,6 +51,10 @@ export class ClientMonitor implements DurableObject {
   private disconnectedAt: number | null = null;
   private currentOutageId: string | null = null;
   private lastAlertTimes: Map<string, number> = new Map();
+  // Trace-on-alert: rate-limit clock + a short-lived marker so the next inbound
+  // trace_result gets tagged trigger='alert'.
+  private lastAlertTraceAt = 0;
+  private pendingAlertTraceUntil = 0;
   // Fixed-size ring buffer for packet loss tracking (independent of flush)
   private lossRing: Array<"ok" | "timeout" | "error"> = [];
   private lossRingIndex: number = 0;
@@ -290,6 +294,9 @@ export class ClientMonitor implements DurableObject {
         case "trace_result": {
           const { session_id, target, protocol, started_at, hops } = msg;
           const traceId = crypto.randomUUID();
+          // Tag traces fired by trace-on-alert (see maybeTraceOnAlert).
+          const trigger = this.pendingAlertTraceUntil > Date.now() ? "alert" : "manual";
+          this.pendingAlertTraceUntil = 0;
           await this.env.DB.batch([
             this.env.DB.prepare(
               `INSERT INTO traces
@@ -297,7 +304,7 @@ export class ClientMonitor implements DurableObject {
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
             ).bind(
               traceId, this.clientId, session_id, target, protocol, started_at,
-              "manual", new Date().toISOString()
+              trigger, new Date().toISOString()
             ),
             ...hops.map((h) =>
               this.env.DB.prepare(
@@ -996,6 +1003,21 @@ export class ClientMonitor implements DurableObject {
     return entries;
   }
 
+  /**
+   * On a degradation alert, fire a bounded path trace (fire-and-forget) so the
+   * event is captured with per-hop diagnostics in the dashboard. Rate-limited to
+   * once per 10 min, skipped for `info` recoveries and when no agent is
+   * connected — it never blocks or delays alert delivery.
+   */
+  private maybeTraceOnAlert(severity: AlertRecord["severity"]): void {
+    if (severity === "info" || this.sessions.length === 0) return;
+    const now = Date.now();
+    if (now - this.lastAlertTraceAt < 10 * 60_000) return;
+    this.lastAlertTraceAt = now;
+    this.pendingAlertTraceUntil = now + 60_000;
+    this.broadcast({ type: "run_trace", target: "1.1.1.1", rounds: 3 });
+  }
+
   private async triggerAlert(
     type: AlertRecord["type"],
     severity: AlertRecord["severity"],
@@ -1015,6 +1037,9 @@ export class ClientMonitor implements DurableObject {
     )
       .bind(alertId, this.clientId, type, severity, value, threshold, timestamp)
       .run();
+
+    // Capture a diagnostic path trace for real (non-recovery) alerts.
+    this.maybeTraceOnAlert(severity);
 
     // Only dispatch notifications if enabled for this client
     if (this.config.notifications_enabled) {
