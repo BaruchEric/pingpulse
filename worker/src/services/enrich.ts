@@ -19,7 +19,9 @@ export const EMPTY_ENRICHMENT: HopEnrichment = {
   geo: null,
 };
 
-const DOH = "https://cloudflare-dns.com/dns-query";
+// Google Public DNS DoH JSON API. NB: Cloudflare Workers cannot reliably fetch
+// cloudflare-dns.com / 1.1.1.1 (loopback), so we use dns.google here.
+const DOH = "https://dns.google/resolve";
 const LOOKUP_TIMEOUT_MS = 3000;
 
 /** True only for globally-routable IPv4 (skips RFC1918/loopback/link-local/CGNAT/multicast). */
@@ -45,7 +47,7 @@ async function dohJson(name: string, type: "TXT" | "PTR"): Promise<unknown | nul
   const timer = setTimeout(() => ctrl.abort(), LOOKUP_TIMEOUT_MS);
   try {
     const r = await fetch(`${DOH}?name=${encodeURIComponent(name)}&type=${type}`, {
-      headers: { accept: "application/dns-json" },
+      headers: { accept: "application/json" },
       signal: ctrl.signal,
     });
     if (!r.ok) return null;
