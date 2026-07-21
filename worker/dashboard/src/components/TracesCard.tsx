@@ -43,6 +43,11 @@ export function TracesCard({ clientId }: { clientId: string }) {
           >
             {t.target}
             <span className="ml-1.5 text-zinc-500">{new Date(t.started_at).toLocaleString()}</span>
+            {t.trigger === "alert" && (
+              <span className="ml-1.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-medium text-amber-400">
+                alert
+              </span>
+            )}
           </button>
         ))}
       </div>
