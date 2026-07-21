@@ -17,6 +17,8 @@ export function ControlPanel() {
   const [simLatency, setSimLatency] = useState("0");
   const [simLoss, setSimLoss] = useState("0");
   const [traceTarget, setTraceTarget] = useState("");
+  const [traceProtocol, setTraceProtocol] = useState<"icmp" | "udp" | "tcp">("icmp");
+  const [tracePort, setTracePort] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const simInitialized = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -235,15 +237,52 @@ export function ControlPanel() {
               className={INPUT_CLASS}
             />
           </div>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs text-zinc-400">Protocol</label>
+              <select
+                value={traceProtocol}
+                onChange={(e) => setTraceProtocol(e.target.value as "icmp" | "udp" | "tcp")}
+                className={INPUT_CLASS}
+              >
+                <option value="icmp">ICMP</option>
+                <option value="udp">UDP</option>
+                <option value="tcp">TCP</option>
+              </select>
+            </div>
+            {traceProtocol !== "icmp" && (
+              <div className="flex-1">
+                <label className="block text-xs text-zinc-400">Port (optional)</label>
+                <input
+                  type="number"
+                  value={tracePort}
+                  onChange={(e) => setTracePort(e.target.value)}
+                  placeholder={traceProtocol === "tcp" ? "443" : "33434"}
+                  className={INPUT_CLASS}
+                />
+              </div>
+            )}
+          </div>
           <button
-            onClick={() => runCommand("run_trace", { target: traceTarget.trim(), rounds: 3 }, "Path trace")}
+            onClick={() =>
+              runCommand(
+                "run_trace",
+                {
+                  target: traceTarget.trim(),
+                  rounds: 3,
+                  ...(traceProtocol !== "icmp" ? { protocol: traceProtocol } : {}),
+                  ...(traceProtocol !== "icmp" && tracePort.trim() ? { port: Number(tracePort) } : {}),
+                },
+                "Path trace"
+              )
+            }
             disabled={busy !== null || !status?.connected || !traceTarget.trim()}
             className={btnPrimary}
           >
             {busy === "run_trace" ? "Tracing..." : "Trace path"}
           </button>
           <p className="text-xs text-zinc-400">
-            Runs a bounded traceroute from the client to the target. Hops appear on the client's overview page once the trace completes.
+            Runs a bounded {traceProtocol.toUpperCase()} traceroute from the client to the target. Hops appear on the client's overview page once the trace completes.
           </p>
         </div>
 

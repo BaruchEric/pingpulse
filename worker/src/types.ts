@@ -290,7 +290,7 @@ export type WSMessage =
   | { type: "update_available"; latest_version: string; download_url: string }
   | { type: "probe_result"; session_id: string; record: ProbeRecord }
   | { type: "self_update"; version: string; repo: string }
-  | { type: "run_trace"; target: string; rounds: number }
+  | { type: "run_trace"; target: string; rounds: number; protocol?: "udp" | "tcp"; port?: number }
   | {
       type: "trace_result";
       session_id: string;

@@ -94,6 +94,10 @@ pub enum IncomingMessage {
         target: String,
         #[serde(default = "default_trace_rounds")]
         rounds: u8,
+        #[serde(default)]
+        protocol: Option<String>,
+        #[serde(default)]
+        port: Option<u16>,
     },
 }
 
@@ -287,12 +291,20 @@ mod tests {
 
     #[test]
     fn test_deserialize_run_trace() {
-        let json = r#"{"type":"run_trace","target":"1.1.1.1","rounds":5}"#;
+        let json =
+            r#"{"type":"run_trace","target":"1.1.1.1","rounds":5,"protocol":"tcp","port":443}"#;
         let msg: IncomingMessage = serde_json::from_str(json).unwrap();
         match msg {
-            IncomingMessage::RunTrace { target, rounds } => {
+            IncomingMessage::RunTrace {
+                target,
+                rounds,
+                protocol,
+                port,
+            } => {
                 assert_eq!(target, "1.1.1.1");
                 assert_eq!(rounds, 5);
+                assert_eq!(protocol.as_deref(), Some("tcp"));
+                assert_eq!(port, Some(443));
             }
             _ => panic!("Expected RunTrace"),
         }

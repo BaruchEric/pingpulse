@@ -927,8 +927,18 @@ export class ClientMonitor implements DurableObject {
         }
         const requested = Number(params?.rounds ?? 3);
         const rounds = Number.isFinite(requested) && requested > 0 ? Math.min(Math.floor(requested), 10) : 3;
-        this.broadcast({ type: "run_trace", target, rounds });
-        return Response.json({ ok: true, target, rounds });
+        const proto = typeof params?.protocol === "string" ? params.protocol.toLowerCase() : undefined;
+        const protocol = proto === "udp" || proto === "tcp" ? proto : undefined;
+        const portNum = Number(params?.port);
+        const port = Number.isInteger(portNum) && portNum > 0 && portNum <= 65535 ? portNum : undefined;
+        this.broadcast({
+          type: "run_trace",
+          target,
+          rounds,
+          ...(protocol ? { protocol } : {}),
+          ...(port != null ? { port } : {}),
+        });
+        return Response.json({ ok: true, target, rounds, protocol: protocol ?? "icmp", port });
       }
 
       default:

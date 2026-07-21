@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use serde::Serialize;
-use trippy_core::{Builder, PrivilegeMode, Protocol};
+use trippy_core::{Builder, PortDirection, PrivilegeMode, Protocol};
 
 /// Maximum time-to-live (hops) to probe.
 const MAX_TTL: u8 = 30;
@@ -20,6 +20,20 @@ const TRACE_TIMEOUT: Duration = Duration::from_secs(30);
 const MIN_ROUNDS: u8 = 1;
 /// Upper clamp for the requested number of rounds.
 const MAX_ROUNDS: u8 = 10;
+/// Default destination port for TCP traces (HTTPS).
+const DEFAULT_TCP_PORT: u16 = 443;
+/// Default destination port for UDP traces (classic traceroute base port).
+const DEFAULT_UDP_PORT: u16 = 33434;
+
+/// Map a protocol string ("icmp" | "udp" | "tcp") to a tracing protocol and its
+/// normalized label. Unknown/absent values fall back to ICMP.
+fn resolve_protocol(protocol: Option<&str>) -> (Protocol, &'static str) {
+    match protocol.map(str::to_ascii_lowercase).as_deref() {
+        Some("udp") => (Protocol::Udp, "udp"),
+        Some("tcp") => (Protocol::Tcp, "tcp"),
+        _ => (Protocol::Icmp, "icmp"),
+    }
+}
 
 /// Per-hop statistics for a single time-to-live within a trace.
 #[derive(Debug, Serialize)]
@@ -64,20 +78,29 @@ fn map_hop(hop: &trippy_core::Hop) -> TraceHop {
     }
 }
 
-/// Run a bounded ICMP path trace to `target`, returning per-hop stats.
+/// Run a bounded path trace to `target`, returning the normalized protocol
+/// label and per-hop stats.
 ///
-/// `rounds` is clamped to `[MIN_ROUNDS, MAX_ROUNDS]` — a value of zero would
-/// otherwise mean "unbounded" in `trippy-core`. The whole trace is additionally
-/// capped by [`TRACE_TIMEOUT`]. The blocking tracer runs on a dedicated
-/// blocking thread so it never stalls the async runtime.
+/// `protocol` selects the transport ("icmp" | "udp" | "tcp", default ICMP);
+/// UDP/TCP trace to a fixed destination `port` (default 33434 / 443). `rounds`
+/// is clamped to `[MIN_ROUNDS, MAX_ROUNDS]` — zero would otherwise mean
+/// "unbounded". The whole trace is additionally capped by [`TRACE_TIMEOUT`].
+/// The blocking tracer runs on a dedicated blocking thread so it never stalls
+/// the async runtime.
 ///
 /// # Errors
-/// Returns an error if `target` cannot be resolved, the tracer fails to
-/// build or run (e.g. insufficient privileges for raw sockets), or the trace
-/// exceeds [`TRACE_TIMEOUT`].
-pub async fn run_trace(target: &str, rounds: u8) -> anyhow::Result<Vec<TraceHop>> {
+/// Returns an error if `target` cannot be resolved, the tracer fails to build
+/// or run (e.g. insufficient privileges for raw sockets), or the trace exceeds
+/// [`TRACE_TIMEOUT`].
+pub async fn run_trace(
+    target: &str,
+    rounds: u8,
+    protocol: Option<String>,
+    port: Option<u16>,
+) -> anyhow::Result<(String, Vec<TraceHop>)> {
     let rounds = rounds.clamp(MIN_ROUNDS, MAX_ROUNDS);
     let target = target.to_string();
+    let (proto, label) = resolve_protocol(protocol.as_deref());
 
     let handle = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<TraceHop>> {
         let addr = resolve(&target)?;
@@ -89,11 +112,24 @@ pub async fn run_trace(target: &str, rounds: u8) -> anyhow::Result<Vec<TraceHop>
         let privilege_mode = PrivilegeMode::Privileged;
         #[cfg(not(windows))]
         let privilege_mode = PrivilegeMode::Unprivileged;
-        let tracer = Builder::new(addr)
-            .protocol(Protocol::Icmp)
+        let mut builder = Builder::new(addr)
+            .protocol(proto)
             .privilege_mode(privilege_mode)
             .max_rounds(Some(usize::from(rounds)))
-            .max_ttl(MAX_TTL)
+            .max_ttl(MAX_TTL);
+        // UDP/TCP trace to a fixed destination port; ICMP has no ports.
+        match proto {
+            Protocol::Udp => {
+                builder =
+                    builder.port_direction(PortDirection::new_fixed_dest(port.unwrap_or(DEFAULT_UDP_PORT)));
+            }
+            Protocol::Tcp => {
+                builder =
+                    builder.port_direction(PortDirection::new_fixed_dest(port.unwrap_or(DEFAULT_TCP_PORT)));
+            }
+            Protocol::Icmp => {}
+        }
+        let tracer = builder
             .build()
             .map_err(|e| anyhow::anyhow!("failed to build tracer: {e}"))?;
         tracer
@@ -102,8 +138,9 @@ pub async fn run_trace(target: &str, rounds: u8) -> anyhow::Result<Vec<TraceHop>
         Ok(tracer.snapshot().hops().iter().map(map_hop).collect())
     });
 
-    match tokio::time::timeout(TRACE_TIMEOUT, handle).await {
-        Ok(joined) => joined.map_err(|e| anyhow::anyhow!("trace task failed: {e}"))?,
+    let hops = match tokio::time::timeout(TRACE_TIMEOUT, handle).await {
+        Ok(joined) => joined.map_err(|e| anyhow::anyhow!("trace task failed: {e}"))??,
         Err(_) => anyhow::bail!("trace timed out after {}s", TRACE_TIMEOUT.as_secs()),
-    }
+    };
+    Ok((label.to_string(), hops))
 }

@@ -573,17 +573,22 @@ async fn handle_message(
             });
         }
 
-        IncomingMessage::RunTrace { target, rounds } => {
+        IncomingMessage::RunTrace {
+            target,
+            rounds,
+            protocol,
+            port,
+        } => {
             info!(event = "run_trace_requested", target = %target, rounds = rounds);
             let tx = speed_tx.clone();
             let session_id = session_id.to_string();
             tokio::spawn(async move {
                 let started_at = chrono::Utc::now().to_rfc3339();
-                let msg = match crate::trace::run_trace(&target, rounds).await {
-                    Ok(hops) => OutgoingMessage::TraceResult {
+                let msg = match crate::trace::run_trace(&target, rounds, protocol, port).await {
+                    Ok((proto_label, hops)) => OutgoingMessage::TraceResult {
                         session_id,
                         target,
-                        protocol: "icmp".to_string(),
+                        protocol: proto_label,
                         started_at,
                         hops,
                     },
