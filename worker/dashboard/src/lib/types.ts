@@ -101,6 +101,7 @@ export interface TraceSummary {
 }
 
 export interface TraceHop {
+  flow_id: number;
   ttl: number;
   addr: string | null;
   hostname: string | null;

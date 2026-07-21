@@ -267,6 +267,8 @@ export interface Env {
 /** A single hop in a path trace (traceroute/mtr-style), produced by the client. */
 export interface TraceHop {
   ttl: number;
+  /** ECMP flow this hop belongs to (0 = single-path). */
+  flow_id?: number;
   addr: string | null;
   loss_pct: number;
   samples: number;
@@ -290,7 +292,7 @@ export type WSMessage =
   | { type: "update_available"; latest_version: string; download_url: string }
   | { type: "probe_result"; session_id: string; record: ProbeRecord }
   | { type: "self_update"; version: string; repo: string }
-  | { type: "run_trace"; target: string; rounds: number; protocol?: "udp" | "tcp"; port?: number }
+  | { type: "run_trace"; target: string; rounds: number; protocol?: "udp" | "tcp"; port?: number; multipath?: boolean }
   | {
       type: "trace_result";
       session_id: string;

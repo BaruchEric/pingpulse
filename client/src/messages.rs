@@ -98,6 +98,8 @@ pub enum IncomingMessage {
         protocol: Option<String>,
         #[serde(default)]
         port: Option<u16>,
+        #[serde(default)]
+        multipath: bool,
     },
 }
 
@@ -300,12 +302,24 @@ mod tests {
                 rounds,
                 protocol,
                 port,
+                multipath,
             } => {
                 assert_eq!(target, "1.1.1.1");
                 assert_eq!(rounds, 5);
                 assert_eq!(protocol.as_deref(), Some("tcp"));
                 assert_eq!(port, Some(443));
+                assert!(!multipath, "multipath defaults to false when omitted");
             }
+            _ => panic!("Expected RunTrace"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_run_trace_multipath() {
+        let json = r#"{"type":"run_trace","target":"1.1.1.1","multipath":true}"#;
+        let msg: IncomingMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            IncomingMessage::RunTrace { multipath, .. } => assert!(multipath),
             _ => panic!("Expected RunTrace"),
         }
     }
@@ -328,6 +342,7 @@ mod tests {
             protocol: "icmp".into(),
             started_at: "2026-07-21T00:00:00+00:00".into(),
             hops: vec![crate::trace::TraceHop {
+                flow_id: 0,
                 ttl: 1,
                 addr: Some("192.168.1.1".into()),
                 loss_pct: 0.0,

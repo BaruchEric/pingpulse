@@ -578,13 +578,14 @@ async fn handle_message(
             rounds,
             protocol,
             port,
+            multipath,
         } => {
-            info!(event = "run_trace_requested", target = %target, rounds = rounds);
+            info!(event = "run_trace_requested", target = %target, rounds = rounds, multipath = multipath);
             let tx = speed_tx.clone();
             let session_id = session_id.to_string();
             tokio::spawn(async move {
                 let started_at = chrono::Utc::now().to_rfc3339();
-                let msg = match crate::trace::run_trace(&target, rounds, protocol, port).await {
+                let msg = match crate::trace::run_trace(&target, rounds, protocol, port, multipath).await {
                     Ok((proto_label, hops)) => OutgoingMessage::TraceResult {
                         session_id,
                         target,

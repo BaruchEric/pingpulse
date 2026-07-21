@@ -4,6 +4,7 @@ import { authGuard } from "@/middleware/auth-guard";
 import { enrichAddrs, hasEnrichment, isPublicIpv4 } from "@/services/enrich";
 
 interface TraceHopRow {
+  flow_id: number;
   ttl: number;
   addr: string | null;
   hostname: string | null;
@@ -51,9 +52,9 @@ traceRoutes.get("/:id/traces/:traceId", async (c) => {
   if (!trace) return c.json({ error: "Trace not found" }, 404);
 
   const hopsRes = await c.env.DB.prepare(
-    `SELECT ttl, addr, hostname, asn, asn_name, geo,
+    `SELECT flow_id, ttl, addr, hostname, asn, asn_name, geo,
             loss_pct, samples, last_ms, avg_ms, best_ms, worst_ms, stddev_ms, jitter_ms
-     FROM trace_hops WHERE trace_id = ? ORDER BY ttl ASC`
+     FROM trace_hops WHERE trace_id = ? ORDER BY flow_id ASC, ttl ASC`
   )
     .bind(traceId)
     .all<TraceHopRow>();
@@ -69,6 +70,10 @@ traceRoutes.get("/:id/traces/:traceId", async (c) => {
   );
   if (pending.length > 0) {
     const enrichment = await enrichAddrs(pending.map((h) => h.addr));
+    // Persist enrichment keyed by addr (deduped): enrichment is a function of
+    // the address, and with multipath multiple flows can share a ttl with
+    // different addrs — keying the UPDATE by ttl would corrupt them.
+    const persisted = new Set<string>();
     const updates = [];
     for (const h of hops) {
       const e = h.addr ? enrichment.get(h.addr) : undefined;
@@ -77,12 +82,15 @@ traceRoutes.get("/:id/traces/:traceId", async (c) => {
       h.asn = e.asn;
       h.asn_name = e.asn_name;
       h.geo = e.geo;
-      updates.push(
-        c.env.DB.prepare(
-          `UPDATE trace_hops SET hostname = ?, asn = ?, asn_name = ?, geo = ?
-           WHERE trace_id = ? AND ttl = ?`
-        ).bind(e.hostname, e.asn, e.asn_name, e.geo, traceId, h.ttl)
-      );
+      if (h.addr && !persisted.has(h.addr)) {
+        persisted.add(h.addr);
+        updates.push(
+          c.env.DB.prepare(
+            `UPDATE trace_hops SET hostname = ?, asn = ?, asn_name = ?, geo = ?
+             WHERE trace_id = ? AND addr = ?`
+          ).bind(e.hostname, e.asn, e.asn_name, e.geo, traceId, h.addr)
+        );
+      }
     }
     if (updates.length > 0) await c.env.DB.batch(updates);
   }

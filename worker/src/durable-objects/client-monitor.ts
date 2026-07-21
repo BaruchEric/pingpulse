@@ -309,10 +309,10 @@ export class ClientMonitor implements DurableObject {
             ...hops.map((h) =>
               this.env.DB.prepare(
                 `INSERT INTO trace_hops
-                   (trace_id, ttl, addr, loss_pct, samples, last_ms, avg_ms, best_ms, worst_ms, stddev_ms, jitter_ms)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                   (trace_id, flow_id, ttl, addr, loss_pct, samples, last_ms, avg_ms, best_ms, worst_ms, stddev_ms, jitter_ms)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
               ).bind(
-                traceId, h.ttl, h.addr ?? null, h.loss_pct, h.samples,
+                traceId, h.flow_id ?? 0, h.ttl, h.addr ?? null, h.loss_pct, h.samples,
                 h.last_ms ?? null, h.avg_ms, h.best_ms ?? null, h.worst_ms ?? null,
                 h.stddev_ms, h.jitter_ms ?? null
               )
@@ -931,14 +931,23 @@ export class ClientMonitor implements DurableObject {
         const protocol = proto === "udp" || proto === "tcp" ? proto : undefined;
         const portNum = Number(params?.port);
         const port = Number.isInteger(portNum) && portNum > 0 && portNum <= 65535 ? portNum : undefined;
+        const multipath = Boolean(params?.multipath);
         this.broadcast({
           type: "run_trace",
           target,
           rounds,
           ...(protocol ? { protocol } : {}),
           ...(port != null ? { port } : {}),
+          ...(multipath ? { multipath: true } : {}),
         });
-        return Response.json({ ok: true, target, rounds, protocol: protocol ?? "icmp", port });
+        return Response.json({
+          ok: true,
+          target,
+          rounds,
+          protocol: multipath ? "udp" : protocol ?? "icmp",
+          port,
+          multipath,
+        });
       }
 
       default:

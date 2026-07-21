@@ -19,6 +19,7 @@ export function ControlPanel() {
   const [traceTarget, setTraceTarget] = useState("");
   const [traceProtocol, setTraceProtocol] = useState<"icmp" | "udp" | "tcp">("icmp");
   const [tracePort, setTracePort] = useState("");
+  const [traceMultipath, setTraceMultipath] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const simInitialized = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -263,15 +264,25 @@ export function ControlPanel() {
               </div>
             )}
           </div>
+          <label className="flex items-center gap-2 text-xs text-zinc-400">
+            <input
+              type="checkbox"
+              checked={traceMultipath}
+              onChange={(e) => setTraceMultipath(e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+            Multipath (discover ECMP paths)
+          </label>
           <button
             onClick={() =>
               runCommand(
                 "run_trace",
                 {
                   target: traceTarget.trim(),
-                  rounds: 3,
+                  rounds: traceMultipath ? 6 : 3,
                   ...(traceProtocol !== "icmp" ? { protocol: traceProtocol } : {}),
                   ...(traceProtocol !== "icmp" && tracePort.trim() ? { port: Number(tracePort) } : {}),
+                  ...(traceMultipath ? { multipath: true } : {}),
                 },
                 "Path trace"
               )
@@ -282,7 +293,7 @@ export function ControlPanel() {
             {busy === "run_trace" ? "Tracing..." : "Trace path"}
           </button>
           <p className="text-xs text-zinc-400">
-            Runs a bounded {traceProtocol.toUpperCase()} traceroute from the client to the target. Hops appear on the client's overview page once the trace completes.
+            Runs a bounded {traceMultipath ? "UDP multipath" : traceProtocol.toUpperCase()} traceroute from the client to the target. Multipath uses UDP to reveal load-balanced (ECMP) paths. Hops appear on the client's overview page once the trace completes.
           </p>
         </div>
 
