@@ -20,7 +20,8 @@
     "deploy": "bun run sync-version && cd dashboard && bun run build && cd .. && wrangler d1 migrations apply pingpulse-db --remote && wrangler deploy",
     "test": "vitest run",
     "lint": "eslint src/ && cd dashboard && eslint src/",
-    "typecheck": "tsc --noEmit && cd dashboard && tsc --noEmit"
+    "typecheck": "tsc --noEmit && cd dashboard && tsc --noEmit",
+    "trace": "bun scripts/pptrace.mjs"
   },
   "dependencies": {
     "hono": "^4.12.8"

@@ -1,6 +1,6 @@
 # pingpulse
 
-Self-hosted network monitor: a lightweight Rust daemon on each machine streams pings, probes, and speed tests over WebSocket to a Cloudflare Workers backend that stores metrics, detects outages, and alerts via Telegram and email.
+Self-hosted network monitor: a lightweight Rust daemon on each machine streams pings, probes, speed tests, and on-demand path traces over WebSocket to a Cloudflare Workers backend that stores metrics, detects outages, traces the network path to any target (with ASN/GeoIP enrichment), and alerts via Telegram and email.
 
 ## TL;DR
 
@@ -14,7 +14,7 @@ Self-hosted network monitor: a lightweight Rust daemon on each machine streams p
 
 pingpulse watches a fleet of machines for connectivity, latency, and throughput problems and tells you when something breaks. It has three tiers:
 
-- **`client/`** — a Rust daemon (crate `pingpulse`, v1.0.5) installed on each monitored host. It runs ICMP pings and HTTP probes, periodic speed tests, buffers samples locally when offline, and streams everything to the backend over a persistent WebSocket. It exposes a small local HTTP API (axum) for on-host management and self-updates from GitHub Releases when the backend reports a newer version.
+- **`client/`** — a Rust daemon (crate `pingpulse`) installed on each monitored host. It runs ICMP pings and HTTP probes, periodic speed tests, and on-demand path traces (ICMP/UDP/TCP traceroute via [`trippy-core`](https://github.com/fujiapple852/trippy)), buffers samples locally when offline, and streams everything to the backend over a persistent WebSocket. It exposes a small local HTTP API (axum) for on-host management and self-updates from GitHub Releases when the backend reports a newer version.
 - **`worker/`** — a Cloudflare Worker (Hono 4) that terminates each client's WebSocket in a per-client `ClientMonitor` Durable Object, persists metrics to D1, archives rollups to R2, writes samples to Analytics Engine, runs scheduled maintenance via cron, dispatches alerts, and serves the dashboard SPA.
 - **`worker/dashboard/`** — a React 19 single-page app (Vite, Tailwind 4, uPlot charts, react-router) served same-origin by the worker for live latency/uptime views.
 
@@ -24,12 +24,30 @@ Alerts go out over the Telegram Bot API and Resend (email) when the backend dete
 
 | Layer | Technology |
 |-------|-----------|
-| Client | Rust, Tokio, tokio-tungstenite (WebSocket), reqwest (HTTP probes), surge-ping (ICMP), clap (CLI), axum + tower-http (local agent API), rusqlite/bundled (offline buffer), tracing |
+| Client | Rust, Tokio, tokio-tungstenite (WebSocket), reqwest (HTTP probes), surge-ping (ICMP), trippy-core (path tracing), clap (CLI), axum + tower-http (local agent API), rusqlite/bundled (offline buffer), tracing |
 | Backend | Cloudflare Workers, Hono 4, Durable Objects (`ClientMonitor`), D1, R2, Analytics Engine, Wrangler 4 |
 | Dashboard | React 19, Vite 8, Tailwind CSS 4, uPlot, react-router 7 |
 | Alerts | Telegram Bot API, Resend (email) |
 | Tests | Vitest (+ `@cloudflare/vitest-pool-workers`) for the worker; `cargo` for the client |
 | CI/CD | GitHub Actions — `deploy-worker.yml` (worker deploy), `release-client.yml` (client binaries → GitHub Releases for OTA self-update) |
+
+## Path tracing
+
+On-demand traceroute from any client to any target, triggered from the dashboard's **Control Panel → Path Trace** and rendered as an mtr-style hop table. Powered by [`trippy-core`](https://github.com/fujiapple852/trippy) in the client; results stream back over the WebSocket and persist to D1 (`traces` / `trace_hops`).
+
+- **Per-hop stats** — per-TTL loss %, last/avg/best/worst RTT, stddev, jitter.
+- **Enrichment** — each public hop is tagged with ASN, AS name, country, and reverse-DNS hostname (lazy on first view, via Google DoH + Team Cymru; no MaxMind DB shipped in the Worker).
+- **Trace-on-alert** — a degradation alert (client down / high latency / high loss) auto-fires a diagnostic trace, tagged `alert`, so every outage is captured with per-hop context.
+- **Protocols** — ICMP (default), UDP, and TCP (to a chosen port), plus IPv6.
+- **ECMP multipath** — optionally fan out over UDP destination ports to discover distinct load-balanced paths, each shown as a separate flow.
+
+> **Privilege note:** the daemon runs unprivileged. `trippy-core` unprivileged mode is supported on macOS (datagram ICMP); a Linux agent needs `CAP_NET_RAW` (`setcap cap_net_raw+ep`).
+
+View the newest trace for a client from the terminal (enriched, color-coded, mtr-style):
+
+```bash
+cd worker && bun run trace [ClientName] [--multipath]
+```
 
 ## Getting started
 
@@ -96,6 +114,7 @@ Run from `worker/` (Bun):
 | `bun run deploy` | sync-version → build dashboard → apply D1 migrations (`--remote`) → `wrangler deploy`. |
 | `bun run test` | Worker test suite (Vitest). |
 | `bun run lint` / `bun run typecheck` | ESLint / `tsc` for worker + dashboard. |
+| `bun run trace [Client] [--multipath]` | Render the newest path trace for a client in the terminal — enriched, color-coded, mtr-style (reads D1 via Wrangler). |
 
 Cross-tier via the root `Makefile`:
 
@@ -108,18 +127,19 @@ Cross-tier via the root `Makefile`:
 ## Architecture
 
 ```
-client/                # Rust daemon (crate: pingpulse v1.0.5)
-  src/                 # main, config, probe, speed_test, websocket, sync, store (rusqlite), agent (axum), service
+client/                # Rust daemon (crate: pingpulse)
+  src/                 # main, config, probe, trace (trippy-core), speed_test, websocket, sync, store (rusqlite), agent (axum), service
 worker/                # Cloudflare Worker (Hono 4) + wrangler.toml
   src/
     index.ts           # worker entry (fetch + scheduled/cron)
-    api/               # router, metrics, clients, auth, sync, alerts, telegram, speedtest, analysis, command, connectivity, export
-    durable-objects/   # client-monitor.ts (per-client WebSocket + live state)
+    api/               # router, metrics, clients, auth, sync, alerts, telegram, speedtest, analysis, command, connectivity, export, traces
+    durable-objects/   # client-monitor.ts (per-client WebSocket + live state, trace relay + trace-on-alert)
     middleware/        # client-auth, auth-guard, rate-limit
-    services/          # alert-dispatch, notify, health-report, archiver, analysis-queries, bot-settings (+ __tests__)
+    services/          # alert-dispatch, notify, health-report, archiver, analysis-queries, bot-settings, enrich (ASN/GeoIP) (+ __tests__)
     utils/             # do-client, client-db, pagination, hash
+  scripts/             # pptrace.mjs (CLI trace viewer, `bun run trace`)
   dashboard/           # React SPA (built to dashboard/dist, served by the worker)
-  migrations/          # D1 SQL (0001_initial, 0002_bot_settings, 0003_speed_test_target)
+  migrations/          # D1 SQL (0001_initial … 0004_trace_results, 0005_trace_flows)
 docs/                  # design specs, plans, and network-analysis notes
 install.sh / .ps1      # client one-line installers (macOS/Linux/Windows)
 setup-telegram.sh      # Telegram bot setup helper
@@ -136,4 +156,4 @@ Makefile               # lint / typecheck / test / build across all three tiers
 
 ## Status
 
-Actively developed and running in production at https://ping.beric.ca (client crate v1.0.5). Backend and client are functional end-to-end; the worker has a Vitest suite covering alert dispatch, analysis queries, and health reports. Note: secrets (Telegram/Resend/JWT) must be provisioned before alerts work, and the `Makefile` `typecheck-worker` target currently runs the dashboard typecheck (a minor rough edge) — prefer `cd worker && bun run typecheck` for the worker itself.
+Actively developed and running in production at https://ping.beric.ca. Backend and client are functional end-to-end, including the full path-tracing stack (per-hop tracing, ASN/GeoIP enrichment, trace-on-alert, ICMP/UDP/TCP + IPv6, and ECMP multipath). The worker has a Vitest suite covering alert dispatch, analysis queries, health reports, and enrichment. Note: secrets (Telegram/Resend/JWT) must be provisioned before alerts work, and the `Makefile` `typecheck-worker` target currently runs the dashboard typecheck (a minor rough edge) — prefer `cd worker && bun run typecheck` for the worker itself.

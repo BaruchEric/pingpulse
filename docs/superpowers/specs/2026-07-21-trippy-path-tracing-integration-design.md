@@ -3,6 +3,8 @@
 **Date:** 2026-07-21
 **Scope:** Fold [fujiapple852/trippy](https://github.com/fujiapple852/trippy)'s path-intelligence capabilities into PingPulse — per-hop tracing, ASN/GeoIP enrichment, and TCP/UDP/IPv6 probing — culminating in *trace-on-alert*.
 
+> **Status: ✅ Shipped (2026-07-21).** All phases live in production on client **v1.0.9** — P1 per-hop tracing, P2 ASN/GeoIP/rDNS enrichment, P3 trace-on-alert, P4 TCP/UDP + IPv6, P5 ECMP multipath. Two implementation notes vs. this plan: enrichment uses **Google DoH** (Workers can't fetch `cloudflare-dns.com`), and multipath fans out over UDP destination ports (trippy's Paris/Dublin ECMP needs raw-header access the unprivileged macOS daemon lacks).
+
 ---
 
 ## Foundation decision
